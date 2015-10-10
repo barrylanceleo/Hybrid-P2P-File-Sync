@@ -4,6 +4,7 @@
 
 #include "socketUtils.h"
 #include "client.h"
+#include "packetUtils.h"
 
 //global variables for host
 char *myListenerPort; //the port on which i'm listening on
@@ -215,7 +216,27 @@ int handleCommands(char *command, char *hostType) {
 
     }
     else {
-        printf("Unsupported Command. Type \"help\" for help\n");
+
+//        struct header *head = (struct header *)malloc(sizeof(struct header));
+//        head->messageType = registerHost;
+//        head->length = 10;
+//        head->fileName = "Barry";
+//        struct packet *pckt = (struct packet *)malloc(sizeof(struct packet));
+//        pckt->header = head;
+//        pckt->message = "HelloHello";
+//
+//        char *packetString = packetDecoder(pckt);
+//        printf("PacketString: %s\n", packetString);
+//
+//        struct packet *packetreceived = packetEncoder(packetString);
+//        printPacket(packetreceived);
+
+        char *message = "barry lance Leo";
+        struct packet *pckt = packetBuilder(registerHost, NULL, strlen(message), message);
+        char *packetString = packetDecoder(pckt);
+        printf("PacketString: %s\n", packetString);
+        printPacket(pckt);
+        //printf("Unsupported Command. Type \"help\" for help\n");
     }
     return 0;
 }

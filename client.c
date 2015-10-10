@@ -4,6 +4,7 @@
 #include "list.h"
 #include "socketUtils.h"
 #include "client.h"
+#include "packetUtils.h"
 
 fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
 int fdmax; //to hold the max file descriptor value
@@ -62,6 +63,8 @@ int runClient(char *port) {
                     size_t commandLength = 50;
                     char *command = (char *) malloc(commandLength);
                     getline(&command, &commandLength, stdin); //get line the variable if space is not sufficient
+                    if (stringEquals(command, "\n")) //to handle the stray \n s
+                        continue;
                     //printf("--Got data: %s--\n",command);
                     handleCommands(command, "CLIENT");
                 }
@@ -102,6 +105,14 @@ int runClient(char *port) {
                     char buffer[1000];
                     int bytes_received = recv(fd, buffer, 1000, 0);
                     buffer[bytes_received] = 0;
+
+                    if (buffer[0] == 0) {
+                        printf("Master Server has terminated improperly.\n");
+                        peerList = NULL;
+                        //need to delete master server connection from connectionList
+                        FD_CLR(fd, &masterFDList);
+                        continue;
+                    }
                     printf("%s\n", buffer);
 
                     //split the hostlist
@@ -180,20 +191,28 @@ int registerToServer(char *hostName, char *port) {
 
     serverSockfd = connectToHost(hostName, port); //connect and get sockfd
     if (serverSockfd == -1) {
-        fprintf(stderr, "Error Register to server\n");
+        fprintf(stderr, "There is no server running on given hostname/port\n");
     }
     else {
         //once registered send the listener port of the client to the server
-        char *msg = myListenerPort;
-        int bytes_sent = send(serverSockfd, msg, strlen(msg), 0);
+        char *message = myListenerPort;
+        struct packet *pckt = packetBuilder(registerHost, NULL, strlen(message), message);
+        char *packetString = packetDecoder(pckt);
+        int bytes_sent = send(serverSockfd, packetString, strlen(packetString), 0);
         if (bytes_sent != -1) {
-            printf("Sent the listerner port %s to the server.\n", msg);
+            printf("Sent the listerner port %s to the server.\n", message);
         }
-        //receive ack from the server #needtomodify
-        char buffer[3];
-        int bytes_received = recv(serverSockfd, buffer, 3, 0);
-        buffer[bytes_received] = 0;
-        printf("Received: %s\n", buffer);
+        free(pckt);
+
+        //receive ack from the server
+        char recvdata[4];
+        int bytes_received = recv(serverSockfd, recvdata, 4, 0);
+        recvdata[bytes_received] = 0;
+        //printf("ACK Packet: %s\n", recvdata);
+        struct packet *recvPacket = packetEncoder(recvdata);
+        //printPacket(recvPacket);
+        if (recvPacket->header->messageType == ack)
+            printf("Received ACK\n");
     }
     return 0;
 }

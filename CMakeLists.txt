@@ -3,5 +3,5 @@ project(Peer_Sync)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 
-set(SOURCE_FILES main.c main.h client.c list.c list.h server.c stringUtils.c stringUtils.h socketUtils.c socketUtils.h server.h client.h)
+set(SOURCE_FILES main.c main.h client.c list.c list.h server.c stringUtils.c stringUtils.h socketUtils.c socketUtils.h server.h client.h packetUtils.c packetUtils.h)
 add_executable(Peer_Sync ${SOURCE_FILES})

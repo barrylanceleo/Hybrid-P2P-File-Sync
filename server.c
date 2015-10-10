@@ -4,6 +4,7 @@
 
 #include "list.h"
 #include "socketUtils.h"
+#include "packetUtils.h"
 
 int broadcastToAllClients(struct list *clientList, char *msg) {
     struct list *current = clientList;
@@ -69,6 +70,8 @@ int runServer(char *port) {
                     size_t commandLength = 50;
                     char *command = (char *) malloc(commandLength);
                     getline(&command, &commandLength, stdin); //get line the variable if space is not sufficient
+                    if (stringEquals(command, "\n")) //to handle the stray \n s
+                        continue;
                     //printf("--Got data: %s--\n",command);
                     handleCommands(command, "SERVER");
                 }
@@ -83,11 +86,13 @@ int runServer(char *port) {
                         return -1;
                     }
                     else {
-                        // receive the port received by the client
-                        char buffer[10];
-                        int bytes_received = recv(clientsockfd, buffer, 10, 0);
-                        buffer[bytes_received] = 0;
-                        //printf("%s\n",buffer);
+                        // receive the port sent by the client
+                        char recvdata[20];
+                        int bytes_received = recv(clientsockfd, recvdata, 20, 0);
+                        recvdata[bytes_received] = 0;
+                        struct packet *recvPacket = packetEncoder(recvdata);
+
+                        //printf("%s\n",recvPacket->message);
 
                         //add the client to the clientList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
@@ -95,33 +100,37 @@ int runServer(char *port) {
                         struct sockaddr *hostAddress = (struct sockaddr *) &clientaddr;
                         client->ipAddress = getIPAddress(hostAddress);
                         client->hostName = getHostFromIp(client->ipAddress);
-                        client->port = strdup(buffer);
+                        client->port = strdup(recvPacket->message);
                         addNode(&clientList, client);
                         printf("Registered client: %s %s/%s\n", client->hostName,
                                client->ipAddress, client->port);
+                        free(recvPacket);
 
                         //send ack to client #needtomodify
-                        char *msg = "ACK";
-                        int bytes_sent = send(clientsockfd, msg, strlen(msg), 0);
+                        char *message = "";
+                        struct packet *pckt = packetBuilder(ack, NULL, strlen(message), message);
+                        char *packetString = packetDecoder(pckt);
+                        //printf("ACK Packet: %s\n",packetString);
+                        int bytes_sent = send(clientsockfd, packetString, strlen(packetString), 0);
 
                         //Broadcast the client list to all the registered clients
                         //build the broadcast message
-                        msg = "";
+                        message = "";
                         struct list *current = clientList;
                         struct host *currentHost = (struct host *) current->value;
-                        msg = stringConcat(msg, currentHost->ipAddress);
-                        msg = stringConcat(msg, " ");
-                        msg = stringConcat(msg, currentHost->port);
+                        message = stringConcat(message, currentHost->ipAddress);
+                        message = stringConcat(message, " ");
+                        message = stringConcat(message, currentHost->port);
                         current = current->next;
                         while (current != NULL) {
                             currentHost = (struct host *) current->value;
-                            msg = stringConcat(msg, " ");
-                            msg = stringConcat(msg, currentHost->ipAddress);
-                            msg = stringConcat(msg, " ");
-                            msg = stringConcat(msg, currentHost->port);
+                            message = stringConcat(message, " ");
+                            message = stringConcat(message, currentHost->ipAddress);
+                            message = stringConcat(message, " ");
+                            message = stringConcat(message, currentHost->port);
                             current = current->next;
                         }
-                        broadcastToAllClients(clientList, msg);
+                        broadcastToAllClients(clientList, message);
                         //printList(clientList);
                     }
                 }
