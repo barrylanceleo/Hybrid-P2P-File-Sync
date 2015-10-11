@@ -8,7 +8,10 @@
 enum messageTypes {
     ack,
     registerHost,
+    hostList,
     connectHost,
+    terminate,
+    quit,
     get,
     put,
     syncFile

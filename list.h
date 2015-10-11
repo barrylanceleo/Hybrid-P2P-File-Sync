@@ -18,5 +18,11 @@ int printList(struct list *head);
 
 bool isHostPresent(struct list *hostList, char *ipAddress, char *host);
 
+struct list *removeNodeById(struct list *hostList, int id);
+
+struct host *getNodeForID(struct list *hostList, int id);
+
+int getIDdForFD(struct list *hostList, int fd);
+
 
 #endif //PEER_SYNC_LIST_H

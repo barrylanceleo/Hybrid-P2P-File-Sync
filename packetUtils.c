@@ -17,7 +17,7 @@ char *packetDecoder(struct packet *packet) {
         asprintf(&packetMessage, "%02d:%s:%d:%s", packet->header->messageType, packet->header->fileName,
                  packet->header->length, packet->message);
     }
-    else if (packet->header->messageType == ack) {
+    else if (packet->header->messageType == ack || packet->header->messageType == terminate) {
         asprintf(&packetMessage, "%02d:%d%s", packet->header->messageType, packet->header->length, "");
     }
     else {
@@ -39,7 +39,7 @@ struct packet *packetEncoder(char *packetString) {
         packet->header->length = atoi(parts[2]);
         packet->message = parts[3];
     }
-    else if (packet->header->messageType == ack) {
+    else if (packet->header->messageType == ack || packet->header->messageType == terminate) {
         packet->header->length = atoi(parts[1]);
         packet->message = "";
     }
@@ -75,7 +75,7 @@ int printPacket(struct packet *packet) {
                packet->header->fileName,
                packet->header->length, packet->message);
     }
-    else if (packet->header->messageType == ack) {
+    else if (packet->header->messageType == ack || packet->header->messageType == terminate) {
         printf("Message Type: %d\nMessage Length: %d\nMessage: %s\n", packet->header->messageType,
                packet->header->length, "");
     }

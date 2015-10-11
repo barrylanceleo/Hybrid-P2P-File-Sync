@@ -49,6 +49,38 @@ int printList(struct list *head) {
     return 0;
 }
 
+struct list *removeNodeById(struct list *hostList, int id) {
+    struct list *current = hostList;
+    struct host *currenthost = (struct host *) current->value;
+    if (current == NULL) {
+        fprintf(stdout, "List is empty\n");
+        return NULL;
+    }
+    else if (current->next == NULL) {
+        if (currenthost->id == id) {
+            printf("First Node Host ID: %d Given ID: %d\n", currenthost->id, id);
+            return current->next;
+        }
+    }
+    else {
+        if (currenthost->id == id) {
+            printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
+            return current->next;
+        }
+        struct list *next = current->next;
+        struct host *nexthost = (struct host *) next->value;
+        do {
+            printf("Host ID: %d Given ID: %d\n", nexthost->id, id);
+            if (nexthost->id == id) {
+                current->next = next->next;
+                return hostList;
+            }
+        } while (next->next != NULL);
+        fprintf(stdout, "Id: %d not found.\n", id);
+        return hostList;
+    }
+}
+
 //checks if hostname/port or ipaddress/port is present in the list
 bool isHostPresent(struct list *hostList, char *ipAddress, char *port) {
     char *hostName = getHostFromIp(ipAddress);
@@ -65,4 +97,42 @@ bool isHostPresent(struct list *hostList, char *ipAddress, char *port) {
         current = current->next;
     }
     return false;
+}
+
+int getIDdForFD(struct list *hostList, int fd) {
+    struct list *current = hostList;
+    if (current == NULL) {
+        fprintf(stdout, "List is empty\n");
+        return -1;
+    }
+    else {
+        do {
+            struct host *currenthost = (struct host *) current->value;
+            printf("Current FD: %d Current ID:%d Given FD: %d\n", currenthost->sockfd, currenthost->id, fd);
+            if (currenthost->sockfd == fd)
+                return currenthost->id;
+            current = current->next;
+        } while (current != NULL);
+        fprintf(stdout, "FD not found\n");
+        return -1;
+    }
+}
+
+struct host *getNodeForID(struct list *hostList, int id) {
+    struct list *current = hostList;
+    if (current == NULL) {
+        fprintf(stdout, "List is empty\n");
+        return NULL;
+    }
+    else {
+        do {
+            struct host *currenthost = (struct host *) current->value;
+            if (currenthost->id == id)
+                return currenthost;
+            printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
+            current = current->next;
+        } while (current != NULL);
+        fprintf(stdout, "Id not found\n");
+        return NULL;
+    }
 }

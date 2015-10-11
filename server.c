@@ -5,6 +5,13 @@
 #include "list.h"
 #include "socketUtils.h"
 #include "packetUtils.h"
+#include "server.h"
+#include "main.h"
+
+fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
+int fdmax; //to hold the max file descriptor value
+int connectionId; //index for connections
+int listernerSockfd; //my listener fd
 
 int broadcastToAllClients(struct list *clientList, char *msg) {
     struct list *current = clientList;
@@ -22,9 +29,12 @@ int broadcastToAllClients(struct list *clientList, char *msg) {
     return 0;
 }
 
+
 int runServer(char *port) {
-    struct list *clientList = NULL; //intialize clientList which contains the lst of registered clients
-    int listernerSockfd = -1;
+    //intialize clientList which contains the list of registered clients
+    clientList = NULL;
+    connectionId = 1;
+    listernerSockfd = -1;
 
     struct connectionInfo *serverInfo = startServer(port, "SERVER");
     if (serverInfo == NULL) {
@@ -33,8 +43,9 @@ int runServer(char *port) {
     }
     listernerSockfd = serverInfo->listernerSockfd;
 
-    fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
-    int fdmax; //to hold the max file descriptor value
+//    fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
+//    int fdmax; //to hold the max file descriptor value
+
     int STDIN = 0; //0 represents STDIN
 
     FD_ZERO(&masterFDList); // clear the master and temp sets
@@ -91,17 +102,22 @@ int runServer(char *port) {
                         int bytes_received = recv(clientsockfd, recvdata, 20, 0);
                         recvdata[bytes_received] = 0;
                         struct packet *recvPacket = packetEncoder(recvdata);
-
-                        //printf("%s\n",recvPacket->message);
+                        printPacket(recvPacket);
 
                         //add the client to the clientList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
+                        client->id = connectionId++;
                         client->sockfd = clientsockfd;
                         struct sockaddr *hostAddress = (struct sockaddr *) &clientaddr;
                         client->ipAddress = getIPAddress(hostAddress);
                         client->hostName = getHostFromIp(client->ipAddress);
                         client->port = strdup(recvPacket->message);
                         addNode(&clientList, client);
+                        //add client to the master list
+                        FD_SET(client->sockfd, &masterFDList);
+                        if (client->sockfd > fdmax) {
+                            fdmax = client->sockfd;
+                        }
                         printf("Registered client: %s %s/%s\n", client->hostName,
                                client->ipAddress, client->port);
                         free(recvPacket);
@@ -130,16 +146,117 @@ int runServer(char *port) {
                             message = stringConcat(message, currentHost->port);
                             current = current->next;
                         }
-                        broadcastToAllClients(clientList, message);
+                        //build packet
+                        pckt = packetBuilder(hostList, NULL, strlen(message), message);
+                        packetString = packetDecoder(pckt);
+                        broadcastToAllClients(clientList, packetString);
                         //printList(clientList);
                     }
                 }
                 else // handle data from clients
                 {
 
+                    char buffer[1000];
+                    int bytes_received = recv(fd, buffer, 1000, 0);
+                    buffer[bytes_received] = 0;
+                    if (buffer[0] == 0) {
+                        int id = getIDdForFD(clientList, fd);
+                        struct host *host = getNodeForID(clientList, id);
+                        printf("Cient: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
+                               host->ipAddress, host->port, host->sockfd);
+                        terminateClient(id);
+                        continue;
+                    }
+
+                    struct packet *recvPacket = packetEncoder(buffer);
+                    printPacket(recvPacket);
+
+                    //received terminate
+                    if (recvPacket->header->messageType == terminate) {
+                        printf("Received TERMINATE\n");
+                        int id = getIDdForFD(clientList, fd);
+                        terminateClient(id);
+                        continue;
+                    }
+
                 }
             }
         }
     }
+}
 
+int printClientList(struct list *head) {
+    struct list *current = head;
+    if (current == NULL) {
+        fprintf(stdout, "There are no clients registered.\n");
+        return 0;
+    }
+    else {
+        printf("id:\t\tHostname\t\tIP Address\t\tPort No.\t\tSock FD\n");
+        do {
+            struct host *currenthost = (struct host *) current->value;
+            printf("%d: \t\t%s\t\t%s\t\t%s\t\t%d\n", currenthost->id, currenthost->hostName, currenthost->ipAddress,
+                   currenthost->port, currenthost->sockfd);
+            current = current->next;
+        } while (current != NULL);
+    }
+    return 0;
+}
+
+int terminateClient(int id) {
+
+    struct host *host = getNodeForID(clientList, id);
+    if (host == NULL) {
+        printf("No client found with given id.\n", id);
+        return 0;
+    }
+
+    //send terminate message to the corresponding client
+    char *message = "";
+    struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
+    char *packetString = packetDecoder(pckt);
+    printf("TERMINATE Packet: %s\n", packetString);
+    int bytes_sent = send(host->sockfd, packetString, strlen(packetString), 0);
+    printf("Sent Terminate: %d\n", bytes_sent);
+
+    //close sock and remove it from fdlist and connection list
+    close(host->sockfd);
+    FD_CLR(host->sockfd, &masterFDList);
+    clientList = removeNodeById(clientList, id);
+    if (clientList == NULL) {
+        printf("Got empty client list\n");
+    }
+    printf("CLosed SockFd: %d\n", host->sockfd);
+    return 0;
+}
+
+void quitServer() {
+    if (clientList == NULL) {
+        printf("No clients connected.\nQuitting Master Server.\n");
+        exit(0);
+    }
+
+    //Build terminate packet
+    char *message = "";
+    struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
+    char *packetString = packetDecoder(pckt);
+    printf("TERMINATE Packet: %s\n", packetString);
+
+    //send terminate message all registered cients
+    int bytes_sent;
+    struct list *current = clientList;
+    do {
+        struct host *currenthost = (struct host *) current->value;
+        printf("FD: %d\n", currenthost->sockfd);
+        bytes_sent = send(currenthost->sockfd, packetString, strlen(packetString), 0);
+        printf("Sent Terminate: %d to FD: %d\n", bytes_sent, currenthost->sockfd);
+        close(currenthost->sockfd);
+        FD_CLR(currenthost->sockfd, &masterFDList);
+        printf("Closed SockFd: %d\n", currenthost->sockfd);
+        current = current->next;
+    } while (current != NULL);
+    close(listernerSockfd);
+    free(clientList);
+    printf("Quitting Master Server.\n");
+    exit(0);
 }

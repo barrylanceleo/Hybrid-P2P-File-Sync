@@ -5,19 +5,23 @@
 #include "socketUtils.h"
 #include "client.h"
 #include "packetUtils.h"
+#include "main.h"
+#include "server.h"
 
 fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
 int fdmax; //to hold the max file descriptor value
-int serverSockfd; //fd of the master server obtained after registering to it
-struct list *peerList; //hostlist received from the server
-struct list *connectionList; //list of hosts the client has a connection with
+struct host *masterServer; //details about the master server
+int connectionId; //index for connections
+
 
 int runClient(char *port) {
     char *name = "Client";
 
-    //initialize the peerList and hostlist
+    //initialize masterServer, peerList and hostlist
     peerList = NULL;
     connectionList = NULL;
+    connectionId = 1;
+    masterServer = NULL;
 
     int listernerSockfd = -1;
     struct connectionInfo *serverInfo = startServer(port, "CLIENT");
@@ -84,63 +88,121 @@ int runClient(char *port) {
                     else {
                         //accept connection from client add it to the connectionList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
-                        client->sockfd = clientsockfd;
                         struct sockaddr *hostAddress = (struct sockaddr *) &clientaddr;
+                        client->id = connectionId++;
+                        client->sockfd = clientsockfd;
                         client->ipAddress = getIPAddress(hostAddress);
                         client->hostName = getHostFromIp(client->ipAddress);
                         client->port = getPort(hostAddress);
                         addNode(&connectionList, client);
+                        FD_SET(client->sockfd, &masterFDList); // add fd to fdlist
+                        if (client->sockfd > fdmax)
+                            fdmax = client->sockfd;
                         printf("Accepted client: %s %s on port: %s\n", client->hostName,
                                client->ipAddress, client->port);
 
                         //send ack to client
                         char *msg = "ACK";
                         int bytes_sent = send(clientsockfd, msg, strlen(msg), 0);
-                        printf("ACK sent %d", bytes_sent);
+                        printf("ACK sent %d\n", bytes_sent);
                     }
 
                 }
-                else if (fd == serverSockfd)// handle data from server
+                else if (masterServer != NULL && fd == masterServer->sockfd)// handle data from server
                 {
                     char buffer[1000];
                     int bytes_received = recv(fd, buffer, 1000, 0);
                     buffer[bytes_received] = 0;
 
+                    //if the server terminates unexpectedly
                     if (buffer[0] == 0) {
-                        printf("Master Server has terminated improperly.\n");
+                        printf("Master Server has terminated unexpectedly.\n");
                         peerList = NULL;
-                        //need to delete master server connection from connectionList
+                        //add code to remove masterserver from clientList
+                        masterServer->sockfd = -1;
+                        close(fd);
                         FD_CLR(fd, &masterFDList);
                         continue;
                     }
-                    printf("%s\n", buffer);
+
+                    struct packet *recvPacket = packetEncoder(buffer);
+                    printPacket(recvPacket);
+
+                    //received terminate from server
+                    if (recvPacket->header->messageType == terminate) {
+                        printf("Received TERMINATE from server\n");
+                        int id = getIDdForFD(connectionList, fd);
+                        terminateClient(id);
+                        peerList = NULL;
+                        continue;
+                    }
 
                     //split the hostlist
                     int length = 0;
-                    char **hostinfo = splitString(buffer, ' ', &length);
-                    //peerList = NULL;
+                    char **hostinfo = splitString(recvPacket->message, ' ', &length);
+                    peerList = NULL;
                     int i;
                     for (i = 0; i < length; i = i + 2) {
                         if (i + 1 >= length)
                             fprintf(stderr, "Disproportionate terms in hostList sent by server.\n");
 
-                        if (stringEquals(myIpAddress, myIpAddress) && stringEquals(myListenerPort, port)) {
+                        if (stringEquals(myIpAddress, hostinfo[i]) && stringEquals(myListenerPort, port)) {
                             //this is so that the client doesn't add itself in the peerList
                             continue;
                         }
 
-                        //if the host is not present in the list add it
-                        if (!isHostPresent(peerList, hostinfo[i], hostinfo[i + 1])) {
-                            struct host *peer = (struct host *) malloc(sizeof(struct host));
-                            peer->sockfd = -1; // we do not have a connection with it yet
-                            peer->ipAddress = hostinfo[i];
-                            peer->hostName = getHostFromIp(peer->ipAddress);
-                            peer->port = hostinfo[i + 1];
-                            addNode(&peerList, peer);
-                            printf("Added %s %s %s to peerList\n", peer->hostName, peer->ipAddress, peer->port);
-                        }
+                        //add all nodes
+                        struct host *peer = (struct host *) malloc(sizeof(struct host));
+                        peer->sockfd = -1; // we do not have a connection with it yet
+                        peer->ipAddress = hostinfo[i];
+                        peer->hostName = getHostFromIp(peer->ipAddress);
+                        peer->port = hostinfo[i + 1];
+                        addNode(&peerList, peer);
+                        //printf("Added %s %s %s to peerList\n", peer->hostName, peer->ipAddress, peer->port);
+
+//                        //if the host is not present in the list add it
+//                        if (!isHostPresent(peerList, hostinfo[i], hostinfo[i + 1])) {
+//                            struct host *peer = (struct host *) malloc(sizeof(struct host));
+//                            peer->sockfd = -1; // we do not have a connection with it yet
+//                            peer->ipAddress = hostinfo[i];
+//                            peer->hostName = getHostFromIp(peer->ipAddress);
+//                            peer->port = hostinfo[i + 1];
+//                            addNode(&peerList, peer);
+//                            printf("Added %s %s %s to peerList\n", peer->hostName, peer->ipAddress, peer->port);
+//                        }
 
                     }
+                    printf("New peerList received from server:\n");
+                    printPeerList(peerList);
+                }
+                else {
+                    //handle data from the peers
+
+                    char buffer[1000];
+                    int bytes_received = recv(fd, buffer, 1000, 0);
+                    buffer[bytes_received] = 0;
+                    //if one of the peers terminates unexpectedly
+                    if (buffer[0] == 0) {
+                        int id = getIDdForFD(connectionList, fd);
+                        struct host *host = getNodeForID(connectionList, id);
+                        printf("Peer: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
+                               host->ipAddress, host->port, host->sockfd);
+                        terminateConnection(id);
+                        continue;
+                    }
+                    else {
+                        struct packet *recvPacket = packetEncoder(buffer);
+                        printPacket(recvPacket);
+
+                        //received terminate
+                        if (recvPacket->header->messageType == terminate)
+                            printf("Received TERMINATE\n");
+                        int id = getIDdForFD(connectionList, fd);
+                        terminateConnection(id);
+                        continue;
+                    }
+
+                    //other data handle
                 }
             }
         }
@@ -187,18 +249,30 @@ int connectToHost(char *hostName, char *port) //connects to give ipaddress or ho
 
 int registerToServer(char *hostName, char *port) {
     hostName = "localhost"; //for testing on local machine #needtomodify
-    printf("Registering to Hostname: %s Port: %s\n", hostName, port);
-
-    serverSockfd = connectToHost(hostName, port); //connect and get sockfd
-    if (serverSockfd == -1) {
+    printf("Registering to Server %s/%s\n", hostName, port);
+    if (masterServer != NULL) {
+        printf("The client is already registered to the master server.\n");
+        return 0;
+    }
+    int serversockfd = connectToHost(hostName, port); //connect and get sockfd
+    if (serversockfd == -1) {
         fprintf(stderr, "There is no server running on given hostname/port\n");
     }
     else {
+        //add server to the connectionList
+        masterServer = (struct host *) malloc(sizeof(struct host));
+        masterServer->id = connectionId++;
+        masterServer->hostName = hostName;
+        masterServer->ipAddress = getIpfromHost("127.0.0.1"); // change to hostName
+        masterServer->port = port;
+        masterServer->sockfd = serversockfd;
+        addNode(&connectionList, masterServer);
+
         //once registered send the listener port of the client to the server
         char *message = myListenerPort;
         struct packet *pckt = packetBuilder(registerHost, NULL, strlen(message), message);
         char *packetString = packetDecoder(pckt);
-        int bytes_sent = send(serverSockfd, packetString, strlen(packetString), 0);
+        int bytes_sent = send(masterServer->sockfd, packetString, strlen(packetString), 0);
         if (bytes_sent != -1) {
             printf("Sent the listerner port %s to the server.\n", message);
         }
@@ -206,7 +280,7 @@ int registerToServer(char *hostName, char *port) {
 
         //receive ack from the server
         char recvdata[4];
-        int bytes_received = recv(serverSockfd, recvdata, 4, 0);
+        int bytes_received = recv(masterServer->sockfd, recvdata, 4, 0);
         recvdata[bytes_received] = 0;
         //printf("ACK Packet: %s\n", recvdata);
         struct packet *recvPacket = packetEncoder(recvdata);
@@ -220,7 +294,7 @@ int registerToServer(char *hostName, char *port) {
 int connectToClient(char *hostName, char *port) {
 
     //Check if hostname/ip and port is registered to server
-//    if(!isHostPresent(peerList, hostName, port))
+//    if(!isHostPresent(peerList, "localhost", port))
 //    {
 //        printf("This client you are trying to connect to is not registered with the server.\n");
 //        return -1;
@@ -242,6 +316,7 @@ int connectToClient(char *hostName, char *port) {
     else {
         //add the client to the connectionList
         struct host *client = (struct host *) malloc(sizeof(struct host));
+        client->id = connectionId++;
         client->sockfd = clientSockfd;
         client->ipAddress = getIpfromHost(hostName);
         client->hostName = hostName;
@@ -257,4 +332,95 @@ int connectToClient(char *hostName, char *port) {
         printf("Received: %s\n", buffer);
     }
     return 0;
+}
+
+int printConnectionList(struct list *head) {
+    struct list *current = head;
+    if (current == NULL) {
+        fprintf(stdout, "There are no connections at the moment.\n");
+        return 0;
+    }
+    else {
+        printf("id:\t\tHostname\t\tIP Address\t\tPort No.\t\tSock FD\n");
+        do {
+            struct host *currenthost = (struct host *) current->value;
+            printf("%d: \t\t%s\t\t%s\t\t%s\t\t%d\n", currenthost->id, currenthost->hostName,
+                   currenthost->ipAddress, currenthost->port, currenthost->sockfd);
+            current = current->next;
+        } while (current != NULL);
+    }
+    return 0;
+}
+
+int printPeerList(struct list *head) {
+    struct list *current = head;
+    if (current == NULL) {
+        fprintf(stdout, "There are no connections at the moment.\n");
+        return 0;
+    }
+    else {
+        printf("Hostname\t\tIP Address\t\tPort No.\n");
+        do {
+            struct host *currenthost = (struct host *) current->value;
+            printf("%s\t\t%s\t\t%s\n", currenthost->hostName,
+                   currenthost->ipAddress, currenthost->port);
+            current = current->next;
+        } while (current != NULL);
+    }
+    return 0;
+}
+
+int terminateConnection(int id) {
+    struct host *host = getNodeForID(connectionList, id);
+    if (host == NULL) {
+        printf("Connection %d not found.\n", id);
+        return 0;
+    }
+
+    //send terminate message to the corresponding peer
+    char *message = "";
+    struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
+    char *packetString = packetDecoder(pckt);
+    printf("TERMINATE Packet: %s\n", packetString);
+    int bytes_sent = send(host->sockfd, packetString, strlen(packetString), 0);
+    printf("Sent Terminate: %d\n", bytes_sent);
+
+    //close sock and remove it from fdlist and connection list
+    close(host->sockfd);
+    FD_CLR(host->sockfd, &masterFDList);
+    connectionList = removeNodeById(connectionList, id);
+    if (connectionList == NULL) {
+        printf("Got empty connection list\n");
+    }
+    printf("CLosed SockFd: %d\n", host->sockfd);
+    return 0;
+}
+
+void quitClient() {
+    if (connectionList == NULL) {
+        printf("Not connected to any peer.\n");
+        exit(0);
+    }
+
+    //Build terminate packet
+    char *message = "";
+    struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
+    char *packetString = packetDecoder(pckt);
+    printf("TERMINATE Packet: %s\n", packetString);
+
+    //send terminate message all connected peers
+    int bytes_sent;
+    struct list *current = connectionList;
+    do {
+        struct host *currenthost = (struct host *) current->value;
+        printf("FD: %d\n", currenthost->sockfd);
+        bytes_sent = send(currenthost->sockfd, packetString, strlen(packetString), 0);
+        printf("Sent Terminate: %d to FD: %d\n", bytes_sent, currenthost->sockfd);
+        close(currenthost->sockfd);
+        FD_CLR(currenthost->sockfd, &masterFDList);
+        printf("Closed SockFd: %d\n", currenthost->sockfd);
+        current = current->next;
+    } while (current != NULL);
+    free(connectionList);
+    exit(0);
 }

@@ -22,7 +22,6 @@
 extern char *myListenerPort; //the port on which i'm listening on
 extern char *myIpAddress; //my ip address
 extern char *myHostName; //my hostName
-
 //structure to return the connection info after creating a server
 struct connectionInfo {
     int listernerSockfd;
@@ -30,16 +29,16 @@ struct connectionInfo {
 };
 
 struct host {
+    int id;
     int sockfd;
     char *port;
     char *hostName;
     char *ipAddress;
 };
 
+
 //methods declared
 struct connectionInfo *startServer(char *port, char *hostType);
-
-int handleCommands(char *command, char *hostType);
 
 char *getIPAddress(struct sockaddr *address);
 
