@@ -81,7 +81,24 @@ int handleCommands(char *command, char *hostType) {
             quitClient();
         }
     }
+    else if (commandLength == 3 && stringEquals(commands[0], "GET")) {
+        if (stringEquals(hostType, "SERVER")) {
+            printf("This is the master server. Only clients can get/put/sync files.\n");
+        }
+        else {
+            getFile(atoi(commands[1]), commands[2]);
+        }
+    }
+    else if (commandLength == 3 && stringEquals(commands[0], "PUT")) {
+        if (stringEquals(hostType, "SERVER")) {
+            printf("This is the master server. Only clients can get/put/sync files.\n");
+        }
+        else {
+            putFile(atoi(commands[1]), commands[2]);
+        }
+    }
     else {
+        system("pwd");
         printf("Unsupported Command. Type \"help\" for help\n");
     }
     return 0;
@@ -108,6 +125,5 @@ int main(int argc, char *argv[]) {
         printf("Can't run programs with the given arguments.");
         printf("Run the program as follows: \n programName s/c portNumber \n s -> server, c -> client");
     }
-
     return 0;
 }

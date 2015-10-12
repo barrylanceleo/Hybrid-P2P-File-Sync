@@ -7,11 +7,13 @@
 #include "packetUtils.h"
 #include "main.h"
 #include "server.h"
+#include <errno.h>
+#include <stdio.h>
 
 fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
 int fdmax; //to hold the max file descriptor value
 struct host *masterServer; //details about the master server
-int connectionId; //index for connections
+int connectionIdGenerator; //index for connections
 
 
 int runClient(char *port) {
@@ -20,7 +22,7 @@ int runClient(char *port) {
     //initialize masterServer, peerList and hostlist
     peerList = NULL;
     connectionList = NULL;
-    connectionId = 1;
+    connectionIdGenerator = 2; //1 is received for the server
     masterServer = NULL;
 
     int listernerSockfd = -1;
@@ -89,7 +91,7 @@ int runClient(char *port) {
                         //accept connection from client add it to the connectionList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
                         struct sockaddr *hostAddress = (struct sockaddr *) &clientaddr;
-                        client->id = connectionId++;
+                        client->id = connectionIdGenerator++;
                         client->sockfd = clientsockfd;
                         client->ipAddress = getIPAddress(hostAddress);
                         client->hostName = getHostFromIp(client->ipAddress);
@@ -134,6 +136,7 @@ int runClient(char *port) {
                         int id = getIDdForFD(connectionList, fd);
                         terminateClient(id);
                         peerList = NULL;
+                        masterServer = NULL;
                         continue;
                     }
 
@@ -180,29 +183,62 @@ int runClient(char *port) {
 
                     char buffer[1000];
                     int bytes_received = recv(fd, buffer, 1000, 0);
+                    printf("Received: %s\n", buffer);
                     buffer[bytes_received] = 0;
                     //if one of the peers terminates unexpectedly
                     if (buffer[0] == 0) {
                         int id = getIDdForFD(connectionList, fd);
-                        struct host *host = getNodeForID(connectionList, id);
+                        struct host *host = getNodeByID(connectionList, id);
                         printf("Peer: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
                                host->ipAddress, host->port, host->sockfd);
                         terminateConnection(id);
                         continue;
                     }
-                    else {
-                        struct packet *recvPacket = packetEncoder(buffer);
-                        printPacket(recvPacket);
+                    struct packet *recvPacket = packetEncoder(buffer);
+                    printPacket(recvPacket);
 
-                        //received terminate
-                        if (recvPacket->header->messageType == terminate)
-                            printf("Received TERMINATE\n");
+                    //received terminate
+                    if (recvPacket->header->messageType == terminate) {
+                        printf("Received TERMINATE\n");
                         int id = getIDdForFD(connectionList, fd);
                         terminateConnection(id);
                         continue;
+                    }//handle error message
+                    else if (recvPacket->header->messageType == error) {
+                        printf("Received error message: %s\n", recvPacket->message);
+                        continue;
+                    }//handle get request
+                    else if (recvPacket->header->messageType == get) {
+                        int connectionId = getIDdForFD(connectionList, fd);
+                        struct host *destination = getNodeByID(connectionList, connectionId);
+                        if (destination == NULL) {
+                            fprintf(stderr, "Coudn't find the connection id.\n");
+                            continue;
+                        }
+                        printf("Received a get request for file %s from client: %s/%s.\n",
+                               recvPacket->header->fileName, destination->ipAddress, destination->port);
+
+                        sendFile(connectionId, recvPacket->header->fileName);
+                    }
+                    else if (recvPacket->header->messageType == put) {
+                        int connectionId = getIDdForFD(connectionList, fd);
+                        struct host *destination = getNodeByID(connectionList, connectionId);
+                        printf("Receiving file: %s from client: %s/%s.\n",
+                               recvPacket->header->fileName, destination->ipAddress, destination->port);
+                        /* Create file where data will be stored */
+                        FILE *fp = fopen("/home/barry/Dropbox/Projects/PeerSync/received.txt",
+                                         "ab"); //for testing it should be
+                        // recvPacket->header->fileName
+                        if (NULL == fp) {
+                            printf("Error opening file");
+                            return 1;
+                        }
+
+                        int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), fp);
+                        printf("wrote file of size %d\n", written_bytes);
+                        fclose(fp);
                     }
 
-                    //other data handle
                 }
             }
         }
@@ -261,7 +297,7 @@ int registerToServer(char *hostName, char *port) {
     else {
         //add server to the connectionList
         masterServer = (struct host *) malloc(sizeof(struct host));
-        masterServer->id = connectionId++;
+        masterServer->id = 1;
         masterServer->hostName = hostName;
         masterServer->ipAddress = getIpfromHost("127.0.0.1"); // change to hostName
         masterServer->port = port;
@@ -285,7 +321,7 @@ int registerToServer(char *hostName, char *port) {
         //printf("ACK Packet: %s\n", recvdata);
         struct packet *recvPacket = packetEncoder(recvdata);
         //printPacket(recvPacket);
-        if (recvPacket->header->messageType == ack)
+        if (recvPacket->header->messageType == ok)
             printf("Received ACK\n");
     }
     return 0;
@@ -316,7 +352,7 @@ int connectToClient(char *hostName, char *port) {
     else {
         //add the client to the connectionList
         struct host *client = (struct host *) malloc(sizeof(struct host));
-        client->id = connectionId++;
+        client->id = connectionIdGenerator++;
         client->sockfd = clientSockfd;
         client->ipAddress = getIpfromHost(hostName);
         client->hostName = hostName;
@@ -370,10 +406,10 @@ int printPeerList(struct list *head) {
     return 0;
 }
 
-int terminateConnection(int id) {
-    struct host *host = getNodeForID(connectionList, id);
+int terminateConnection(int connectionId) {
+    struct host *host = getNodeByID(connectionList, connectionId);
     if (host == NULL) {
-        printf("Connection %d not found.\n", id);
+        printf("Connection %d not found.\n", connectionId);
         return 0;
     }
 
@@ -388,7 +424,7 @@ int terminateConnection(int id) {
     //close sock and remove it from fdlist and connection list
     close(host->sockfd);
     FD_CLR(host->sockfd, &masterFDList);
-    connectionList = removeNodeById(connectionList, id);
+    connectionList = removeNodeById(connectionList, connectionId);
     if (connectionList == NULL) {
         printf("Got empty connection list\n");
     }
@@ -423,4 +459,90 @@ void quitClient() {
     } while (current != NULL);
     free(connectionList);
     exit(0);
+}
+
+int getFile(int connectionId, char *filename) {
+    //get the destination host
+    struct host *destination = getNodeByID(connectionList, connectionId);
+    if (destination == NULL) {
+        printf("There is no connection with connection id: %d\n", connectionId);
+        return -1;
+    }
+
+    //build a get request
+    char *message = "";
+    struct packet *pckt = packetBuilder(get, filename, strlen(message), message);
+    char *packetString = packetDecoder(pckt);
+    printf("Get Request Packet: %s\n", packetString);
+
+    //send the get request
+    int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+    if (bytes_sent != strlen(packetString)) {
+        fprintf(stderr, "Get Request not fully sent.Bytes sent: %d, Packet Length: %d\n", bytes_sent,
+                strlen(packetString));
+        return -1;
+    }
+    return 0;
+}
+
+int putFile(int connectionId, char *filename) {
+
+}
+
+int sendFile(int connectionId, char *filename) {
+    struct host *destination = getNodeByID(connectionList, connectionId);
+    if (destination == NULL) {
+        fprintf(stderr, "Count't find connection id to send file.\n");
+        return -1;
+    }
+    FILE *fp = fopen(filename, "rb"); //rb is for opening binary files
+    if (fp == NULL) {
+        printf("%s\n", strerror(errno));
+        char *errorMessage;
+        asprintf(&errorMessage, "%s", strerror(errno));
+        struct packet *pckt = packetBuilder(error, filename, strlen(errorMessage), errorMessage);
+        char *packetString = packetDecoder(pckt);
+        printf("Packet String: %s\n", packetString);
+        printPacket(pckt);
+        int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+        return -2;
+    }
+
+    /* Read data from file and send it */
+    while (1) {
+        /* First read file in chunks of 256 bytes */
+        char buff[256] = {0};
+        int bytes_read = fread(buff, 1, 256, fp);
+        printf("Bytes read %d \n", bytes_read);
+
+        /* If read was success, send data. */
+        if (bytes_read > 0) {
+            printf("Sending data: %s\n", buff);
+            //build packet
+            struct packet *pckt = packetBuilder(put, filename, strlen(buff), buff);
+            char *packetString = packetDecoder(pckt);
+            printf("Packet String: %s\n", packetString);
+            printPacket(pckt);
+            int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+        }
+        //no data read -- probably because the given filename is a directory
+        if (bytes_read == 0) {
+            char *errorMessage = "Error reading file.";
+            asprintf(&errorMessage, "%s", strerror(errno));
+            struct packet *pckt = packetBuilder(error, filename, strlen(errorMessage), errorMessage);
+            char *packetString = packetDecoder(pckt);
+            printf("Packet String: %s\n", packetString);
+            printPacket(pckt);
+            int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+        }
+        if (bytes_read < 256) {
+            if (feof(fp))
+                printf("End of file\n");
+            if (ferror(fp))
+                printf("Error reading file.\n");
+            break;
+        }
+    }
+    fclose(fp);
+    return 0;
 }

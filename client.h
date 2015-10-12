@@ -18,7 +18,14 @@ int printConnectionList(struct list *head);
 
 int printPeerList(struct list *head);
 
-int terminateConnection(int id); // terminate the given connection id
+int terminateConnection(int connectionId); // terminate the given connection id
 
 void quitClient();
+
+int getFile(int connectionId, char *filename);
+
+int sendFile(int connectionId, char *filename);
+
+int putFile(int connectionId, char *filename);
+
 #endif //PEER_SYNC_CLIENT_H

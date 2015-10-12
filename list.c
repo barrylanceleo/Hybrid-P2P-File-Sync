@@ -118,7 +118,7 @@ int getIDdForFD(struct list *hostList, int fd) {
     }
 }
 
-struct host *getNodeForID(struct list *hostList, int id) {
+struct host *getNodeByID(struct list *hostList, int id) {
     struct list *current = hostList;
     if (current == NULL) {
         fprintf(stdout, "List is empty\n");
@@ -127,9 +127,9 @@ struct host *getNodeForID(struct list *hostList, int id) {
     else {
         do {
             struct host *currenthost = (struct host *) current->value;
+            printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
             if (currenthost->id == id)
                 return currenthost;
-            printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
             current = current->next;
         } while (current != NULL);
         fprintf(stdout, "Id not found\n");

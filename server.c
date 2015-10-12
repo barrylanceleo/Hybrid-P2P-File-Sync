@@ -10,7 +10,7 @@
 
 fd_set masterFDList, tempFDList; //Master file descriptor list to add all sockets and stdin
 int fdmax; //to hold the max file descriptor value
-int connectionId; //index for connections
+int connectionIdGenerator; //index for connections
 int listernerSockfd; //my listener fd
 
 int broadcastToAllClients(struct list *clientList, char *msg) {
@@ -33,7 +33,7 @@ int broadcastToAllClients(struct list *clientList, char *msg) {
 int runServer(char *port) {
     //intialize clientList which contains the list of registered clients
     clientList = NULL;
-    connectionId = 1;
+    connectionIdGenerator = 1;
     listernerSockfd = -1;
 
     struct connectionInfo *serverInfo = startServer(port, "SERVER");
@@ -106,7 +106,7 @@ int runServer(char *port) {
 
                         //add the client to the clientList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
-                        client->id = connectionId++;
+                        client->id = connectionIdGenerator++;
                         client->sockfd = clientsockfd;
                         struct sockaddr *hostAddress = (struct sockaddr *) &clientaddr;
                         client->ipAddress = getIPAddress(hostAddress);
@@ -124,7 +124,7 @@ int runServer(char *port) {
 
                         //send ack to client #needtomodify
                         char *message = "";
-                        struct packet *pckt = packetBuilder(ack, NULL, strlen(message), message);
+                        struct packet *pckt = packetBuilder(ok, NULL, strlen(message), message);
                         char *packetString = packetDecoder(pckt);
                         //printf("ACK Packet: %s\n",packetString);
                         int bytes_sent = send(clientsockfd, packetString, strlen(packetString), 0);
@@ -161,7 +161,7 @@ int runServer(char *port) {
                     buffer[bytes_received] = 0;
                     if (buffer[0] == 0) {
                         int id = getIDdForFD(clientList, fd);
-                        struct host *host = getNodeForID(clientList, id);
+                        struct host *host = getNodeByID(clientList, id);
                         printf("Cient: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
                                host->ipAddress, host->port, host->sockfd);
                         terminateClient(id);
@@ -205,7 +205,7 @@ int printClientList(struct list *head) {
 
 int terminateClient(int id) {
 
-    struct host *host = getNodeForID(clientList, id);
+    struct host *host = getNodeByID(clientList, id);
     if (host == NULL) {
         printf("No client found with given id.\n", id);
         return 0;

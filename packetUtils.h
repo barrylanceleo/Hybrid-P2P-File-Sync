@@ -6,7 +6,8 @@
 #define PEER_SYNC_PACKETUTILS_H
 
 enum messageTypes {
-    ack,
+    ok,
+    error,
     registerHost,
     hostList,
     connectHost,

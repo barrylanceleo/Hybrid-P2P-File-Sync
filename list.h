@@ -20,7 +20,7 @@ bool isHostPresent(struct list *hostList, char *ipAddress, char *host);
 
 struct list *removeNodeById(struct list *hostList, int id);
 
-struct host *getNodeForID(struct list *hostList, int id);
+struct host *getNodeByID(struct list *hostList, int id);
 
 int getIDdForFD(struct list *hostList, int fd);
 
