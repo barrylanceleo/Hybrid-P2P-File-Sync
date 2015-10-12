@@ -527,8 +527,8 @@ int sendFile(int connectionId, char *filename) {
         }
         //no data read -- probably because the given filename is a directory
         if (bytes_read == 0) {
-            char *errorMessage = "Error reading file.";
-            asprintf(&errorMessage, "%s", strerror(errno));
+            char *errorMessage;
+            asprintf(&errorMessage, "Error reading file: %s", filename);
             struct packet *pckt = packetBuilder(error, filename, strlen(errorMessage), errorMessage);
             char *packetString = packetDecoder(pckt);
             printf("Packet String: %s\n", packetString);
@@ -539,7 +539,7 @@ int sendFile(int connectionId, char *filename) {
             if (feof(fp))
                 printf("End of file\n");
             if (ferror(fp))
-                printf("Error reading file.\n");
+                printf("Error reading file: %s\n", filename);
             break;
         }
     }
