@@ -3,6 +3,8 @@
 #include "client.h"
 #include "stringUtils.h"
 #include "socketUtils.h"
+#include "packetUtils.h"
+#include "list.h"
 
 void printCommands() {
     printf("1. HELP\n2. CREATOR\n3. DISPLAY\n4. REGISTER <server IP> <port no>\n"
@@ -97,8 +99,28 @@ int handleCommands(char *command, char *hostType) {
             putFile(atoi(commands[1]), commands[2]);
         }
     }
+    else if (commandLength == 3 && stringEquals(commands[0], "SEND")) {
+        if (stringEquals(hostType, "SERVER")) {
+            printf("Sending ....\n");
+//            struct packet * packet = packetBuilder(message,NULL,strlen(commands[2]), commands[2]);
+//            char * packetString = packetDecoder(packet);
+//            printf("Packet: %s", packet);
+            struct host *destination = getNodeByID(clientList, atoi(commands[1]));
+            char *packetString = "02^13^^barrylanceleo";
+            send(destination->sockfd, packetString, strlen(packetString), 0);
+        }
+        else {
+            //
+        }
+    }
     else {
-        system("pwd");
+        char *packetMessage;
+        int a = 2;
+        int b = 0;
+        char *c = NULL;
+        char *d = NULL;
+        asprintf(&packetMessage, "%02d^%d^%s^%s", a, b, NULL, d);
+        printf("Packet: %s\n", packetMessage);
         printf("Unsupported Command. Type \"help\" for help\n");
     }
     return 0;

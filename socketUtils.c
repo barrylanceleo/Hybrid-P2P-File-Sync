@@ -162,3 +162,74 @@ struct connectionInfo *startServer(char *port, char *hostType) {
     return serverInfo;
 }
 
+struct packet *readPacket(int sockfd) {
+    //printf("In readPacket()\n");
+    char delimiter = '^';
+    char buffer[PACKET_SIZE];
+    struct packet *packet = (struct packet *) malloc(sizeof(struct packet));
+    struct header *header = (struct header *) malloc(sizeof(struct header));
+    packet->header = header;
+
+    //start receiving packet
+    int bytes_received = recv(sockfd, buffer, 2, 0);
+    buffer[bytes_received] = 0;
+    if (bytes_received == 0) {
+        printf("Recevied zero bytes. Probably because someone terminated.\n");
+        return NULL;
+    }
+    //printf("Message Type: %s, bytes received: %d\n", buffer, bytes_received);
+    packet->header->messageType = atoi(buffer);
+    printf("Received a packet of type: %d\n", packet->header->messageType);
+    bytes_received = recv(sockfd, buffer, 1, 0); //discard the delimiter
+    //receive the message length
+    bytes_received = recv(sockfd, buffer, 1, 0); //first character of length
+    char lenght[20];
+    int index = 0;
+    while (buffer[0] != delimiter) {
+        printf("Parsing : %c\n", buffer[0]);
+        lenght[index] = buffer[0];
+        index++;
+        bytes_received = recv(sockfd, buffer, 1, 0);
+
+    }
+    lenght[index] = 0;
+    //printf("lenght chars: %s\n", lenght);
+    packet->header->length = atoi(lenght);
+    printf("Packet Lenth: %d\n", packet->header->length);
+    //read the file name, we have last read the delimiter
+
+    //%02d^%d^%s^%s
+    bytes_received = recv(sockfd, buffer, 1, 0);
+    char filename[1000];
+    index = 0;
+    while (buffer[0] != delimiter) {
+        filename[index] = buffer[0];
+        index++;
+        bytes_received = recv(sockfd, buffer, 1, 0);
+    }
+    filename[index] = 0;
+    packet->header->fileName = filename;
+    printf("Filename: %s\n", packet->header->fileName);
+
+    //if message is empty
+    if (packet->header->length == 0) {
+        packet->message = "";
+        return packet;
+    }
+
+    //receive the message
+    int message_lenght_to_be_received = packet->header->length;
+    char *message = "";
+    while (message_lenght_to_be_received > PACKET_SIZE) {
+        bytes_received = recv(sockfd, buffer, PACKET_SIZE, 0);
+        message = stringConcat(message, buffer);
+        message_lenght_to_be_received = message_lenght_to_be_received - PACKET_SIZE;
+    }
+    bytes_received = recv(sockfd, buffer, message_lenght_to_be_received, 0); //receive only the remaining message
+    buffer[bytes_received] = 0;
+    //printf("Buffer: %s\n", buffer);
+    message = stringConcat(message, buffer);
+    packet->message = message;
+    printf("Message: %s\n", packet->message);
+    return packet;
+}

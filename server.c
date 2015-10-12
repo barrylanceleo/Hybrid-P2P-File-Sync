@@ -98,11 +98,14 @@ int runServer(char *port) {
                     }
                     else {
                         // receive the port sent by the client
-                        char recvdata[20];
-                        int bytes_received = recv(clientsockfd, recvdata, 20, 0);
-                        recvdata[bytes_received] = 0;
-                        struct packet *recvPacket = packetEncoder(recvdata);
+                        struct packet *recvPacket = readPacket(clientsockfd);
+                        if (recvPacket == NULL) {
+                            printf("Recevied zero bytes. Probably because someone terminated.\n");
+                            break;
+                        }
+                        printf("Received packet: ");
                         printPacket(recvPacket);
+                        printf("\n");
 
                         //add the client to the clientList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
@@ -122,16 +125,9 @@ int runServer(char *port) {
                                client->ipAddress, client->port);
                         free(recvPacket);
 
-                        //send ack to client #needtomodify
-                        char *message = "";
-                        struct packet *pckt = packetBuilder(ok, NULL, strlen(message), message);
-                        char *packetString = packetDecoder(pckt);
-                        //printf("ACK Packet: %s\n",packetString);
-                        int bytes_sent = send(clientsockfd, packetString, strlen(packetString), 0);
-
                         //Broadcast the client list to all the registered clients
                         //build the broadcast message
-                        message = "";
+                        char *message = "";
                         struct list *current = clientList;
                         struct host *currentHost = (struct host *) current->value;
                         message = stringConcat(message, currentHost->ipAddress);
@@ -147,8 +143,10 @@ int runServer(char *port) {
                             current = current->next;
                         }
                         //build packet
-                        pckt = packetBuilder(hostList, NULL, strlen(message), message);
-                        packetString = packetDecoder(pckt);
+                        printf("Broadcast Message: %s", message);
+                        struct packet *pckt = packetBuilder(hostList, NULL, strlen(message), message);
+                        char *packetString = packetDecoder(pckt);
+                        printf("Broadcast packet: %s\n", packetString);
                         broadcastToAllClients(clientList, packetString);
                         //printList(clientList);
                     }
@@ -156,26 +154,32 @@ int runServer(char *port) {
                 else // handle data from clients
                 {
 
-                    char buffer[1000];
-                    int bytes_received = recv(fd, buffer, 1000, 0);
-                    buffer[bytes_received] = 0;
-                    if (buffer[0] == 0) {
-                        int id = getIDdForFD(clientList, fd);
+                    struct packet *recvPacket = readPacket(fd);
+                    if (recvPacket == NULL) {
+                        //one of the clients terminated unexpectedly
+                        int id = getIDForFD(clientList, fd);
                         struct host *host = getNodeByID(clientList, id);
                         printf("Cient: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
                                host->ipAddress, host->port, host->sockfd);
                         terminateClient(id);
                         continue;
                     }
-
-                    struct packet *recvPacket = packetEncoder(buffer);
+                    printf("Received packet: ");
                     printPacket(recvPacket);
+                    printf("\n");
 
                     //received terminate
                     if (recvPacket->header->messageType == terminate) {
                         printf("Received TERMINATE\n");
-                        int id = getIDdForFD(clientList, fd);
+                        int id = getIDForFD(clientList, fd);
                         terminateClient(id);
+                        continue;
+                    }
+
+                    if (recvPacket->header->messageType == put || recvPacket->header->messageType == get
+                        || recvPacket->header->messageType == syncFile) {
+                        printf("Master can't put, get or sync files.\n");
+
                         continue;
                     }
 

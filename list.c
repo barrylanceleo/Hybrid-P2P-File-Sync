@@ -99,7 +99,7 @@ bool isHostPresent(struct list *hostList, char *ipAddress, char *port) {
     return false;
 }
 
-int getIDdForFD(struct list *hostList, int fd) {
+int getIDForFD(struct list *hostList, int fd) {
     struct list *current = hostList;
     if (current == NULL) {
         fprintf(stdout, "List is empty\n");

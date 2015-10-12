@@ -50,4 +50,6 @@ char *getIpfromHost(char *hostName);
 
 struct addrinfo *getAddressInfo(char *hostName, char *port);
 
+struct packet *readPacket(int sockfd);
+
 #endif //PEER_SYNC_SOCKETUTILS_H

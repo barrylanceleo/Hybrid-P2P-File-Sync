@@ -5,9 +5,11 @@
 #ifndef PEER_SYNC_PACKETUTILS_H
 #define PEER_SYNC_PACKETUTILS_H
 
+#define PACKET_SIZE 100
 enum messageTypes {
     ok,
     error,
+    message,
     registerHost,
     hostList,
     connectHost,

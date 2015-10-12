@@ -11,18 +11,18 @@
 char *packetDecoder(struct packet *packet) {
     char *packetMessage;
 
+    if (packet->header->fileName == NULL) {
+        packet->header->fileName = "";
+    }
+    if (packet->message == NULL) {
+        packet->message = "";
+    }
 
-    if (packet->header->messageType == put || packet->header->messageType == get ||
-        packet->header->messageType == syncFile) {
-        asprintf(&packetMessage, "%02d^%s^%d^%s", packet->header->messageType, packet->header->fileName,
-                 packet->header->length, packet->message);
-    }
-    else if (packet->header->messageType == ok || packet->header->messageType == terminate) {
-        asprintf(&packetMessage, "%02d^%d%s", packet->header->messageType, packet->header->length, "");
-    }
-    else {
-        asprintf(&packetMessage, "%02d^%d^%s", packet->header->messageType, packet->header->length, packet->message);
-    }
+    asprintf(&packetMessage, "%02d^%d^%s^%s", packet->header->messageType, packet->header->length,
+             packet->header->fileName, packet->message);
+
+    printf("PacketString: %s\n", packetMessage);
+
     return packetMessage;
 }
 
@@ -45,7 +45,7 @@ struct packet *packetEncoder(char *packetString) {
     }
     else {
         packet->header->length = atoi(parts[1]);
-        packet->message = parts[2];
+        packet->message = parts[3];
     }
 
     if (strlen(packet->message) > packet->header->length) {
@@ -69,19 +69,7 @@ struct packet *packetBuilder(enum messageTypes messageType, char *fileName,
 }
 
 int printPacket(struct packet *packet) {
-    if (packet->header->messageType == put || packet->header->messageType == get ||
-        packet->header->messageType == syncFile) {
-        printf("Message Type: %d\nFile Name: %s\nMessage Length: %d\nMessage: %s\n", packet->header->messageType,
-               packet->header->fileName,
-               packet->header->length, packet->message);
-    }
-    else if (packet->header->messageType == ok || packet->header->messageType == terminate) {
-        printf("Message Type: %d\nMessage Length: %d\nMessage: %s\n", packet->header->messageType,
-               packet->header->length, "");
-    }
-    else {
-        printf("Message Type: %d\nMessage Length: %d\nMessage: %s\n", packet->header->messageType,
-               packet->header->length, packet->message);
-    }
-}
 
+    printf("Message Type: %d\nFile Name: %s\nMessage Length: %d\nMessage: %s\n", packet->header->messageType,
+           packet->header->fileName, packet->header->length, packet->message);
+}
