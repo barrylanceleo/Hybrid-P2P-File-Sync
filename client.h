@@ -28,4 +28,6 @@ int sendFile(int connectionId, char *filename);
 
 int putFile(int connectionId, char *filename);
 
+//int receiveFile(int connectionId, struct packet *recvPacket);
+
 #endif //PEER_SYNC_CLIENT_H

@@ -14,21 +14,21 @@ char *packetDecoder(struct packet *packet) {
 
     if (packet->header->messageType == put || packet->header->messageType == get ||
         packet->header->messageType == syncFile) {
-        asprintf(&packetMessage, "%02d:%s:%d:%s", packet->header->messageType, packet->header->fileName,
+        asprintf(&packetMessage, "%02d^%s^%d^%s", packet->header->messageType, packet->header->fileName,
                  packet->header->length, packet->message);
     }
     else if (packet->header->messageType == ok || packet->header->messageType == terminate) {
-        asprintf(&packetMessage, "%02d:%d%s", packet->header->messageType, packet->header->length, "");
+        asprintf(&packetMessage, "%02d^%d%s", packet->header->messageType, packet->header->length, "");
     }
     else {
-        asprintf(&packetMessage, "%02d:%d:%s", packet->header->messageType, packet->header->length, packet->message);
+        asprintf(&packetMessage, "%02d^%d^%s", packet->header->messageType, packet->header->length, packet->message);
     }
     return packetMessage;
 }
 
 struct packet *packetEncoder(char *packetString) {
     int outputsize;
-    char **parts = splitString(packetString, ':', &outputsize);
+    char **parts = splitString(packetString, '^', &outputsize);
     struct header *head = (struct header *) malloc(sizeof(struct header));
     struct packet *packet = (struct packet *) malloc(sizeof(struct packet));
     packet->header = head;

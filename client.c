@@ -15,7 +15,6 @@ int fdmax; //to hold the max file descriptor value
 struct host *masterServer; //details about the master server
 int connectionIdGenerator; //index for connections
 
-
 int runClient(char *port) {
     char *name = "Client";
 
@@ -161,19 +160,6 @@ int runClient(char *port) {
                         peer->hostName = getHostFromIp(peer->ipAddress);
                         peer->port = hostinfo[i + 1];
                         addNode(&peerList, peer);
-                        //printf("Added %s %s %s to peerList\n", peer->hostName, peer->ipAddress, peer->port);
-
-//                        //if the host is not present in the list add it
-//                        if (!isHostPresent(peerList, hostinfo[i], hostinfo[i + 1])) {
-//                            struct host *peer = (struct host *) malloc(sizeof(struct host));
-//                            peer->sockfd = -1; // we do not have a connection with it yet
-//                            peer->ipAddress = hostinfo[i];
-//                            peer->hostName = getHostFromIp(peer->ipAddress);
-//                            peer->port = hostinfo[i + 1];
-//                            addNode(&peerList, peer);
-//                            printf("Added %s %s %s to peerList\n", peer->hostName, peer->ipAddress, peer->port);
-//                        }
-
                     }
                     printf("New peerList received from server:\n");
                     printPeerList(peerList);
@@ -222,21 +208,8 @@ int runClient(char *port) {
                     }
                     else if (recvPacket->header->messageType == put) {
                         int connectionId = getIDdForFD(connectionList, fd);
-                        struct host *destination = getNodeByID(connectionList, connectionId);
-                        printf("Receiving file: %s from client: %s/%s.\n",
-                               recvPacket->header->fileName, destination->ipAddress, destination->port);
-                        /* Create file where data will be stored */
-                        FILE *fp = fopen("/home/barry/Dropbox/Projects/PeerSync/received.txt",
-                                         "ab"); //for testing it should be
-                        // recvPacket->header->fileName
-                        if (NULL == fp) {
-                            printf("Error opening file");
-                            return 1;
-                        }
-
-                        int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), fp);
-                        printf("wrote file of size %d\n", written_bytes);
-                        fclose(fp);
+                        receiveFile(connectionId, recvPacket);
+                        continue;
                     }
 
                 }
@@ -487,6 +460,52 @@ int getFile(int connectionId, char *filename) {
 
 int putFile(int connectionId, char *filename) {
 
+    struct host *destination = getNodeByID(connectionList, connectionId);
+    if (destination == NULL) {
+        fprintf(stderr, "Count't find connection id to send file.\n");
+        return -1;
+    }
+    FILE *fp = fopen(filename, "rb"); //rb is for opening binary files
+    int filenamePartLenght;
+    char **filenameParts = splitString(filename, '/', &filenamePartLenght);
+    if (fp == NULL) {
+        printf("%s\n", strerror(errno));
+        return -2;
+    }
+    /* Read data from file and send it */
+    while (1) {
+        /* First read file in chunks of 256 bytes */
+        char buff[256] = {0};
+        int bytes_read = fread(buff, 1, 256, fp);
+        printf("Bytes read %d \n", bytes_read);
+
+        /* If read was success, send data. */
+        if (bytes_read > 0) {
+            printf("Sending data: %s\n", buff);
+            //build packet
+            struct packet *pckt = packetBuilder(put, filenameParts[filenamePartLenght - 1], strlen(buff), buff);
+            char *packetString = packetDecoder(pckt);
+            printf("Packet String: %s\n", packetString);
+            printPacket(pckt);
+            int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+        }
+        //no data read -- probably because the given filename is a directory
+        if (bytes_read < 256) {
+            if (feof(fp))
+                printf("End of file\n");
+            if (ferror(fp))
+                printf("Error reading file: %s\n", filename);
+            break;
+        }
+    }
+    char *buff = "";
+    struct packet *pckt = packetBuilder(ok, NULL, strlen(buff), buff);
+    char *packetString = packetDecoder(pckt);
+    printf("Packet String: %s\n", packetString);
+    printPacket(pckt);
+    int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+    fclose(fp);
+    return 0;
 }
 
 int sendFile(int connectionId, char *filename) {
@@ -496,11 +515,14 @@ int sendFile(int connectionId, char *filename) {
         return -1;
     }
     FILE *fp = fopen(filename, "rb"); //rb is for opening binary files
+    int filenamePartLenght;
+    char **filenameParts = splitString(filename, '/', &filenamePartLenght);
     if (fp == NULL) {
         printf("%s\n", strerror(errno));
         char *errorMessage;
         asprintf(&errorMessage, "%s", strerror(errno));
-        struct packet *pckt = packetBuilder(error, filename, strlen(errorMessage), errorMessage);
+        struct packet *pckt = packetBuilder(error, filenameParts[filenamePartLenght - 1], strlen(errorMessage),
+                                            errorMessage);
         char *packetString = packetDecoder(pckt);
         printf("Packet String: %s\n", packetString);
         printPacket(pckt);
@@ -519,7 +541,7 @@ int sendFile(int connectionId, char *filename) {
         if (bytes_read > 0) {
             printf("Sending data: %s\n", buff);
             //build packet
-            struct packet *pckt = packetBuilder(put, filename, strlen(buff), buff);
+            struct packet *pckt = packetBuilder(put, filenameParts[filenamePartLenght - 1], strlen(buff), buff);
             char *packetString = packetDecoder(pckt);
             printf("Packet String: %s\n", packetString);
             printPacket(pckt);
@@ -543,6 +565,46 @@ int sendFile(int connectionId, char *filename) {
             break;
         }
     }
+    //send ok packet
+    char *buff = "";
+    struct packet *pckt = packetBuilder(ok, NULL, strlen(buff), buff);
+    char *packetString = packetDecoder(pckt);
+    printf("Packet String: %s\n", packetString);
+    printPacket(pckt);
+    int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+    fclose(fp);
+    return 0;
+}
+
+int receiveFile(int connectionId, struct packet *recvPacket) {
+    struct host *source = getNodeByID(connectionList, connectionId);
+
+    printf("Receiving file: %s from client: %s/%s.\n",
+           recvPacket->header->fileName, source->ipAddress, source->port);
+    /* Create file where data will be stored */
+
+    FILE *fp = fopen("/home/barry/Dropbox/Projects/PeerSync/received.txt", "wb"); //for testing
+    // it should be recvPacket->header->fileName
+    if (NULL == fp) {
+        printf("Error opening file");
+        return 1;
+    }
+
+    int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), fp);
+    char buffer[1000];
+    int bytes_received = recv(source->sockfd, buffer, 1000, 0);
+    buffer[bytes_received] = 0;
+    recvPacket = packetEncoder(buffer);
+    printPacket(recvPacket);
+    while (recvPacket->header->messageType != ok) {
+        written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), fp);
+        bytes_received = recv(source->sockfd, buffer, 1000, 0);
+        buffer[bytes_received] = 0;
+        recvPacket = packetEncoder(buffer);
+        printPacket(recvPacket);
+    }
+    //keep reading till you get a a OK message, need to modify server to send a OK message after sending file
+    printf("Received file :%d\n", written_bytes);
     fclose(fp);
     return 0;
 }
