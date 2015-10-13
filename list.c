@@ -127,7 +127,7 @@ struct host *getNodeByID(struct list *hostList, int id) {
     else {
         do {
             struct host *currenthost = (struct host *) current->value;
-            printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
+            //printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
             if (currenthost->id == id)
                 return currenthost;
             current = current->next;

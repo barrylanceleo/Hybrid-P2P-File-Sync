@@ -21,7 +21,7 @@ char *packetDecoder(struct packet *packet) {
     asprintf(&packetMessage, "%02d^%d^%s^%s", packet->header->messageType, packet->header->length,
              packet->header->fileName, packet->message);
 
-    printf("PacketString: %s\n", packetMessage);
+    //printf("PacketString: %s\n", packetMessage);
 
     return packetMessage;
 }
@@ -34,7 +34,7 @@ struct packet *packetEncoder(char *packetString) {
     packet->header = head;
     packet->header->messageType = atoi(parts[0]);
     if (packet->header->messageType == put || packet->header->messageType == get ||
-        packet->header->messageType == syncFile) {
+            packet->header->messageType == syncFiles) {
         packet->header->fileName = parts[1];
         packet->header->length = atoi(parts[2]);
         packet->message = parts[3];

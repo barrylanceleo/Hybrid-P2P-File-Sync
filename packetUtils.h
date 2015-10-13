@@ -5,7 +5,7 @@
 #ifndef PEER_SYNC_PACKETUTILS_H
 #define PEER_SYNC_PACKETUTILS_H
 
-#define PACKET_SIZE 100
+#define PACKET_SIZE 5000
 enum messageTypes {
     ok,
     error,
@@ -17,7 +17,7 @@ enum messageTypes {
     quit,
     get,
     put,
-    syncFile
+    syncFiles
 };
 struct header {
     enum messageTypes messageType;

@@ -99,14 +99,21 @@ int handleCommands(char *command, char *hostType) {
             putFile(atoi(commands[1]), commands[2]);
         }
     }
+    else if (commandLength == 1 && stringEquals(commands[0], "SYNC")) {
+        if (stringEquals(hostType, "SERVER")) {
+            printf("This is the master server. Only clients can get/put/sync files.\n");
+        }
+        else {
+            startSync();
+        }
+    }
     else if (commandLength == 3 && stringEquals(commands[0], "SEND")) {
         if (stringEquals(hostType, "SERVER")) {
             printf("Sending ....\n");
-//            struct packet * packet = packetBuilder(message,NULL,strlen(commands[2]), commands[2]);
-//            char * packetString = packetDecoder(packet);
-//            printf("Packet: %s", packet);
+            struct packet *packet = packetBuilder(message, NULL, strlen(commands[2]), commands[2]);
+            char *packetString = packetDecoder(packet);
+            printf("Packet: %s", packet);
             struct host *destination = getNodeByID(clientList, atoi(commands[1]));
-            char *packetString = "02^13^^barrylanceleo";
             send(destination->sockfd, packetString, strlen(packetString), 0);
         }
         else {

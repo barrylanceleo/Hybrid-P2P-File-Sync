@@ -176,13 +176,26 @@ int runServer(char *port) {
                         continue;
                     }
 
-                    if (recvPacket->header->messageType == put || recvPacket->header->messageType == get
-                        || recvPacket->header->messageType == syncFile) {
-                        printf("Master can't put, get or sync files.\n");
-
+                    if (recvPacket->header->messageType == put || recvPacket->header->messageType == get) {
+                        printf("This is the master server. Only clients can put, get or sync files.\n");
                         continue;
                     }
 
+                    if (recvPacket->header->messageType == syncFiles) {
+                        int connectionId = getIDForFD(clientList, fd);
+                        printf("Received a sync request from client %d. "
+                                       "Broacasting message to all registered clients./n", connectionId);
+
+                        //build a sync packet
+                        struct packet *packet = packetBuilder(syncFiles, NULL, 0, NULL);
+                        char *packetString = packetDecoder(packet);
+                        printf("Sync Packet: %s\n", packetString);
+
+                        //send sync message to all clients
+                        broadcastToAllClients(clientList, packetString);
+                        printf("Sync request sent to all clients.\n");
+                        continue;
+                    }
                 }
             }
         }

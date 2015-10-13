@@ -179,14 +179,14 @@ struct packet *readPacket(int sockfd) {
     }
     //printf("Message Type: %s, bytes received: %d\n", buffer, bytes_received);
     packet->header->messageType = atoi(buffer);
-    printf("Received a packet of type: %d\n", packet->header->messageType);
+    //printf("Received a packet of type: %d\n", packet->header->messageType);
     bytes_received = recv(sockfd, buffer, 1, 0); //discard the delimiter
     //receive the message length
     bytes_received = recv(sockfd, buffer, 1, 0); //first character of length
     char lenght[20];
     int index = 0;
     while (buffer[0] != delimiter) {
-        printf("Parsing : %c\n", buffer[0]);
+        //printf("Parsing : %c\n", buffer[0]);
         lenght[index] = buffer[0];
         index++;
         bytes_received = recv(sockfd, buffer, 1, 0);
@@ -195,7 +195,7 @@ struct packet *readPacket(int sockfd) {
     lenght[index] = 0;
     //printf("lenght chars: %s\n", lenght);
     packet->header->length = atoi(lenght);
-    printf("Packet Lenth: %d\n", packet->header->length);
+    //printf("Packet Lenth: %d\n", packet->header->length);
     //read the file name, we have last read the delimiter
 
     //%02d^%d^%s^%s
@@ -209,7 +209,7 @@ struct packet *readPacket(int sockfd) {
     }
     filename[index] = 0;
     packet->header->fileName = filename;
-    printf("Filename: %s\n", packet->header->fileName);
+    //printf("Filename: %s\n", packet->header->fileName);
 
     //if message is empty
     if (packet->header->length == 0) {
@@ -230,6 +230,6 @@ struct packet *readPacket(int sockfd) {
     //printf("Buffer: %s\n", buffer);
     message = stringConcat(message, buffer);
     packet->message = message;
-    printf("Message: %s\n", packet->message);
+    //printf("Message: %s\n", packet->message);
     return packet;
 }
