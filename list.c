@@ -108,7 +108,7 @@ int getIDForFD(struct list *hostList, int fd) {
     else {
         do {
             struct host *currenthost = (struct host *) current->value;
-            printf("Current FD: %d Current ID:%d Given FD: %d\n", currenthost->sockfd, currenthost->id, fd);
+            //printf("Current FD: %d Current ID:%d Given FD: %d\n", currenthost->sockfd, currenthost->id, fd);
             if (currenthost->sockfd == fd)
                 return currenthost->id;
             current = current->next;

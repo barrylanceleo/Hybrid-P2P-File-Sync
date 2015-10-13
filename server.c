@@ -103,9 +103,9 @@ int runServer(char *port) {
                             printf("Recevied zero bytes. Probably because someone terminated.\n");
                             break;
                         }
-                        printf("Received packet: ");
-                        printPacket(recvPacket);
-                        printf("\n");
+//                        printf("Received packet: ");
+//                        printPacket(recvPacket);
+//                        printf("\n");
 
                         //add the client to the clientList
                         struct host *client = (struct host *) malloc(sizeof(struct host));
@@ -143,10 +143,10 @@ int runServer(char *port) {
                             current = current->next;
                         }
                         //build packet
-                        printf("Broadcast Message: %s", message);
+                        //printf("Broadcast Message: %s", message);
                         struct packet *pckt = packetBuilder(hostList, NULL, strlen(message), message);
                         char *packetString = packetDecoder(pckt);
-                        printf("Broadcast packet: %s\n", packetString);
+                        //printf("Broadcast packet: %s\n", packetString);
                         broadcastToAllClients(clientList, packetString);
                         //printList(clientList);
                     }
@@ -164,9 +164,9 @@ int runServer(char *port) {
                         terminateClient(id);
                         continue;
                     }
-                    printf("Received packet: ");
-                    printPacket(recvPacket);
-                    printf("\n");
+//                    printf("Received packet: ");
+//                    printPacket(recvPacket);
+//                    printf("\n");
 
                     //received terminate
                     if (recvPacket->header->messageType == terminate) {
@@ -184,12 +184,12 @@ int runServer(char *port) {
                     if (recvPacket->header->messageType == syncFiles) {
                         int connectionId = getIDForFD(clientList, fd);
                         printf("Received a sync request from client %d. "
-                                       "Broacasting message to all registered clients./n", connectionId);
+                                       "Broacasting message to all registered clients.\n", connectionId);
 
                         //build a sync packet
                         struct packet *packet = packetBuilder(syncFiles, NULL, 0, NULL);
                         char *packetString = packetDecoder(packet);
-                        printf("Sync Packet: %s\n", packetString);
+                        //printf("Sync Packet: %s\n", packetString);
 
                         //send sync message to all clients
                         broadcastToAllClients(clientList, packetString);
@@ -232,9 +232,9 @@ int terminateClient(int id) {
     char *message = "";
     struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
     char *packetString = packetDecoder(pckt);
-    printf("TERMINATE Packet: %s\n", packetString);
+    //printf("TERMINATE Packet: %s\n", packetString);
     int bytes_sent = send(host->sockfd, packetString, strlen(packetString), 0);
-    printf("Sent Terminate: %d\n", bytes_sent);
+    //printf("Sent Terminate: %d\n", bytes_sent);
 
     //close sock and remove it from fdlist and connection list
     close(host->sockfd);
@@ -243,7 +243,7 @@ int terminateClient(int id) {
     if (clientList == NULL) {
         printf("Got empty client list\n");
     }
-    printf("CLosed SockFd: %d\n", host->sockfd);
+    // printf("Closed SockFd: %d\n", host->sockfd);
     return 0;
 }
 
@@ -257,19 +257,19 @@ void quitServer() {
     char *message = "";
     struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
     char *packetString = packetDecoder(pckt);
-    printf("TERMINATE Packet: %s\n", packetString);
+    //printf("TERMINATE Packet: %s\n", packetString);
 
     //send terminate message all registered cients
     int bytes_sent;
     struct list *current = clientList;
     do {
         struct host *currenthost = (struct host *) current->value;
-        printf("FD: %d\n", currenthost->sockfd);
+        //printf("FD: %d\n", currenthost->sockfd);
         bytes_sent = send(currenthost->sockfd, packetString, strlen(packetString), 0);
-        printf("Sent Terminate: %d to FD: %d\n", bytes_sent, currenthost->sockfd);
+        //printf("Sent Terminate: %d to FD: %d\n", bytes_sent, currenthost->sockfd);
         close(currenthost->sockfd);
         FD_CLR(currenthost->sockfd, &masterFDList);
-        printf("Closed SockFd: %d\n", currenthost->sockfd);
+        //printf("Closed SockFd: %d\n", currenthost->sockfd);
         current = current->next;
     } while (current != NULL);
     close(listernerSockfd);

@@ -226,8 +226,8 @@ int connectToHost(char *hostName, char *port) //connects to give ipaddress or ho
     if (serverAddressInfo == NULL) {
         return -1;
     }
-    printf("Server IP Address: %s Port: %s\n",
-           getIPAddress(serverAddressInfo->ai_addr), getPort(serverAddressInfo->ai_addr));
+//    printf("Server IP Address: %s Port: %s\n",
+//           getIPAddress(serverAddressInfo->ai_addr), getPort(serverAddressInfo->ai_addr));
 
     int clientSocketfd;
 
@@ -375,9 +375,9 @@ int terminateConnection(int connectionId) {
     char *message = "";
     struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
     char *packetString = packetDecoder(pckt);
-    printf("TERMINATE Packet: %s\n", packetString);
+    //printf("TERMINATE Packet: %s\n", packetString);
     int bytes_sent = send(host->sockfd, packetString, strlen(packetString), 0);
-    printf("Sent Terminate: %d\n", bytes_sent);
+    //printf("Sent Terminate: %d\n", bytes_sent);
 
     //close sock and remove it from fdlist and connection list
     close(host->sockfd);
@@ -386,7 +386,7 @@ int terminateConnection(int connectionId) {
     if (connectionList == NULL) {
         printf("Got empty connection list\n");
     }
-    printf("CLosed SockFd: %d\n", host->sockfd);
+    //printf("Closed SockFd: %d\n", host->sockfd);
     return 0;
 }
 
@@ -400,19 +400,19 @@ void quitClient() {
     char *message = "";
     struct packet *pckt = packetBuilder(terminate, NULL, strlen(message), message);
     char *packetString = packetDecoder(pckt);
-    printf("TERMINATE Packet: %s\n", packetString);
+    //printf("TERMINATE Packet: %s\n", packetString);
 
     //send terminate message all connected peers
     int bytes_sent;
     struct list *current = connectionList;
     do {
         struct host *currenthost = (struct host *) current->value;
-        printf("FD: %d\n", currenthost->sockfd);
+        //printf("FD: %d\n", currenthost->sockfd);
         bytes_sent = send(currenthost->sockfd, packetString, strlen(packetString), 0);
-        printf("Sent Terminate: %d to FD: %d\n", bytes_sent, currenthost->sockfd);
+        //printf("Sent Terminate: %d to FD: %d\n", bytes_sent, currenthost->sockfd);
         close(currenthost->sockfd);
         FD_CLR(currenthost->sockfd, &masterFDList);
-        printf("Closed SockFd: %d\n", currenthost->sockfd);
+        //printf("Closed SockFd: %d\n", currenthost->sockfd);
         current = current->next;
     } while (current != NULL);
     free(connectionList);
@@ -431,7 +431,7 @@ int getFile(int connectionId, char *filename) {
     char *message = "";
     struct packet *pckt = packetBuilder(get, filename, strlen(message), message);
     char *packetString = packetDecoder(pckt);
-    printf("Get Request Packet: %s\n", packetString);
+    //printf("Get Request Packet: %s\n", packetString);
 
     //send the get request
     int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
@@ -607,7 +607,7 @@ int syncAll() {
     DIR *d;
     struct dirent *dir;
     char *directory = "/home/barry/Dropbox/Projects/PeerSync/files_to_be_sent/";
-    char *filename;
+    char *filename = "";
     d = opendir(directory);
     if (d != NULL) {
         while ((dir = readdir(d)) != NULL) {
