@@ -113,7 +113,7 @@ int handleCommands(char *command, char *hostType) {
             struct packet *packet = packetBuilder(message, NULL, strlen(commands[2]), commands[2]);
             char *packetString = packetDecoder(packet);
             printf("Packet: %s", packet);
-            struct host *destination = getNodeByID(clientList, atoi(commands[1]));
+            struct host *destination = getHostByID(clientList, atoi(commands[1]));
             send(destination->sockfd, packetString, strlen(packetString), 0);
         }
         else {
@@ -143,11 +143,11 @@ int main(int argc, char *argv[]) {
     }
 
     if (stringEquals(argv[1], "s") || stringEquals(argv[1], "server")) {
-        printf("Running as server..\n");
+        printf("Starting server..\n");
         runServer(port);
     }
     else if (stringEquals(argv[1], "c") || stringEquals(argv[1], "client")) {
-        printf("Running as client..\n");
+        printf("Starting client..\n");
         runClient(port);
     }
     else {

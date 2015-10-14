@@ -16,6 +16,7 @@ int addNode(struct list **head, void *value) {
     }
     struct list *node = malloc(sizeof(struct list));
     node->value = value;
+    node->filePointer = NULL;
     node->next = NULL;
     if (*head == NULL) {
         *head = node;
@@ -118,7 +119,8 @@ int getIDForFD(struct list *hostList, int fd) {
     }
 }
 
-struct host *getNodeByID(struct list *hostList, int id) {
+struct host *getHostByID(struct list *hostList, int id)
+{
     struct list *current = hostList;
     if (current == NULL) {
         fprintf(stdout, "List is empty\n");
@@ -130,6 +132,26 @@ struct host *getNodeByID(struct list *hostList, int id) {
             //printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
             if (currenthost->id == id)
                 return currenthost;
+            current = current->next;
+        } while (current != NULL);
+        fprintf(stdout, "Id not found\n");
+        return NULL;
+    }
+}
+
+struct list *getNodeByID(struct list *hostList, int id)
+{
+    struct list *current = hostList;
+    if (current == NULL) {
+        fprintf(stdout, "List is empty\n");
+        return NULL;
+    }
+    else {
+        do {
+            struct host *currenthost = (struct host *) current->value;
+            //printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
+            if (currenthost->id == id)
+                return current;
             current = current->next;
         } while (current != NULL);
         fprintf(stdout, "Id not found\n");

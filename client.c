@@ -161,7 +161,7 @@ int runClient(char *port) {
 
                     if (recvPacket->header->messageType == syncFiles) {
                         printf("Received a sync initiate request from Server.\n");
-                        syncAll();
+                        syncHostnameFiles();
                         continue;
                     }
 
@@ -173,7 +173,7 @@ int runClient(char *port) {
                     if (recvPacket == NULL) {
                         //one of the clients terminated unexpectedly
                         int id = getIDForFD(connectionList, fd);
-                        struct host *host = getNodeByID(connectionList, id);
+                        struct host *host = getHostByID(connectionList, id);
                         printf("Peer: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
                                host->ipAddress, host->port, host->sockfd);
                         terminateConnection(id);
@@ -196,7 +196,7 @@ int runClient(char *port) {
                     }//handle get request
                     else if (recvPacket->header->messageType == get) {
                         int connectionId = getIDForFD(connectionList, fd);
-                        struct host *destination = getNodeByID(connectionList, connectionId);
+                        struct host *destination = getHostByID(connectionList, connectionId);
                         if (destination == NULL) {
                             fprintf(stderr, "Coudn't find the connection id.\n");
                             continue;
@@ -205,10 +205,15 @@ int runClient(char *port) {
                                recvPacket->header->fileName, destination->ipAddress, destination->port);
 
                         sendFile(connectionId, recvPacket->header->fileName);
-                    }
+                    }//hand a put packet
                     else if (recvPacket->header->messageType == put) {
                         int connectionId = getIDForFD(connectionList, fd);
-                        receiveFile(connectionId, recvPacket);
+                        receiveFileAsynchronously(connectionId, recvPacket);
+                        continue;
+                    }//handle a ok packet
+                    else if (recvPacket->header->messageType == ok) {
+                        int connectionId = getIDForFD(connectionList, fd);
+                        okPacketHandler(connectionId, recvPacket);
                         continue;
                     }
 
@@ -365,7 +370,7 @@ int printPeerList(struct list *head) {
 }
 
 int terminateConnection(int connectionId) {
-    struct host *host = getNodeByID(connectionList, connectionId);
+    struct host *host = getHostByID(connectionList, connectionId);
     if (host == NULL) {
         printf("Connection %d not found.\n", connectionId);
         return 0;
@@ -421,7 +426,7 @@ void quitClient() {
 
 int getFile(int connectionId, char *filename) {
     //get the destination host
-    struct host *destination = getNodeByID(connectionList, connectionId);
+    struct host *destination = getHostByID(connectionList, connectionId);
     if (destination == NULL) {
         printf("There is no connection with connection id: %d\n", connectionId);
         return -1;
@@ -446,7 +451,7 @@ int getFile(int connectionId, char *filename) {
 int putFile(int connectionId, char *filename) {
 
     //get the destination
-    struct host *destination = getNodeByID(connectionList, connectionId);
+    struct host *destination = getHostByID(connectionList, connectionId);
     if (destination == NULL) {
         printf("Count't find connection id to send file.\n");
         return -1;
@@ -460,7 +465,7 @@ int putFile(int connectionId, char *filename) {
     //open file
     FILE *fp = fopen(filename, "rb"); //rb is for opening binary files
     if (fp == NULL) {
-        printf("%s\n", strerror(errno));
+        printf("Filename: %s, %s\n", filename, strerror(errno));
         return -2;
     }
 
@@ -505,7 +510,7 @@ int putFile(int connectionId, char *filename) {
     printf("File: %s sent. Size %d bytes.\n", justFilename, data_read);
 
     //send a ok message to indicate completion.
-    pckt = packetBuilder(ok, "", 0, "");
+    pckt = packetBuilder(ok, justFilename, 0, "");
     packetString = packetDecoder(pckt);
 //    printf("OK Packet String: %s\n", packetString);
 //    printPacket(pckt);
@@ -521,7 +526,7 @@ int sendFile(int connectionId, char *filename) // this is include the error mess
     char *justFilename = filenameParts[filenamePartLength - 1];
 
     //get the destination
-    struct host *destination = getNodeByID(connectionList, connectionId);
+    struct host *destination = getHostByID(connectionList, connectionId);
     if (destination == NULL) {
         printf("Count't find connection id to send file.\n");
         return -1;
@@ -554,8 +559,9 @@ int sendFile(int connectionId, char *filename) // this is include the error mess
     return 0;
 }
 
-int receiveFile(int connectionId, struct packet *recvPacket) {
-    struct host *source = getNodeByID(connectionList, connectionId);
+int receiveFileASynchronously(int connectionId, struct packet *recvPacket)
+{
+    struct host *source = getHostByID(connectionList, connectionId);
     printf("Receiving file: %s from client: %s/%s.\n",
            recvPacket->header->fileName, source->ipAddress, source->port);
 
@@ -584,6 +590,52 @@ int receiveFile(int connectionId, struct packet *recvPacket) {
     return 0;
 }
 
+int receiveFileAsynchronously(int connectionId, struct packet *recvPacket)
+{
+    struct list *connection = getNodeByID(connectionList, connectionId);
+    struct host *source = (struct host *) connection->value;
+
+    if (connection->filePointer == NULL) {
+        printf("Receiving file: %s from client: %s/%s.\n",
+               recvPacket->header->fileName, source->ipAddress, source->port);
+
+        // Create file where data will be stored
+        char *filename = recvPacket->header->fileName;
+        char *tempfilename = stringConcat("/home/barry/Dropbox/Projects/PeerSync/received_files_2/", filename);
+        FILE *fp = fopen(tempfilename, "wb"); //for testing it should be filename
+        if (fp == NULL) {
+            printf("Error opening file.\n");
+            return -1;
+        }
+
+        //update the File pointer to the connection
+        connection->filePointer = fp;
+
+        //write the packet received
+        int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), connection->filePointer);
+
+    }
+    else {
+        //write the packet received
+        int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), connection->filePointer);
+    }
+    return 0;
+}
+
+int okPacketHandler(int connectionId, struct packet *recvPacket)
+{
+    struct list *connection = getNodeByID(connectionList, connectionId);
+    struct host *source = (struct host *) connection->value;
+
+    //print completion of file download
+    printf("File %s download complete.\n", recvPacket->header->fileName);
+    //close the file pointer
+    fclose(connection->filePointer);
+    //make the file pointer in the connection to indicate that no file operation is in progress
+    connection->filePointer = NULL;
+    return 0;
+}
+
 int startSync() {
     //check if the client is registered to the server
     if (masterServer == NULL) {
@@ -599,6 +651,32 @@ int startSync() {
     //send sync message to the server for broadcast
     int bytes_sent = send(masterServer->sockfd, packetString, strlen(packetString), 0);
     printf("Sync request sent to server.\n");
+    return 0;
+}
+
+int syncHostnameFiles()
+{
+
+    //open current directory and send all files to all the connected peers
+    char *directory = "/home/barry/Dropbox/Projects/PeerSync/files_to_be_sent/";
+    char *filename = stringConcat(myHostName, ".txt");
+
+    //send file for all peers in connectionList
+    struct list *listIterator = connectionList;
+    struct host *destination;
+    while (listIterator != NULL) {
+        destination = (struct host *) listIterator->value;
+        //if destination is the master server do not send
+        if (masterServer != NULL && destination->sockfd == masterServer->sockfd) {
+            listIterator = listIterator->next;
+            continue;
+        }
+        filename = stringConcat(directory, filename);
+        putFile(destination->id, filename);
+        listIterator = listIterator->next;
+    }
+    //printf("Sent file: %s\n", filename);
+
     return 0;
 }
 

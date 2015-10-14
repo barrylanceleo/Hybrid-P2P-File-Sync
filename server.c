@@ -100,7 +100,7 @@ int runServer(char *port) {
                         // receive the port sent by the client
                         struct packet *recvPacket = readPacket(clientsockfd);
                         if (recvPacket == NULL) {
-                            printf("Recevied zero bytes. Probably because someone terminated.\n");
+                            //printf("Recevied zero bytes. Probably because someone terminated.\n");
                             break;
                         }
 //                        printf("Received packet: ");
@@ -158,7 +158,7 @@ int runServer(char *port) {
                     if (recvPacket == NULL) {
                         //one of the clients terminated unexpectedly
                         int id = getIDForFD(clientList, fd);
-                        struct host *host = getNodeByID(clientList, id);
+                        struct host *host = getHostByID(clientList, id);
                         printf("Cient: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
                                host->ipAddress, host->port, host->sockfd);
                         terminateClient(id);
@@ -170,8 +170,8 @@ int runServer(char *port) {
 
                     //received terminate
                     if (recvPacket->header->messageType == terminate) {
-                        printf("Received TERMINATE\n");
                         int id = getIDForFD(clientList, fd);
+                        printf("Received Terminate command from \n");
                         terminateClient(id);
                         continue;
                     }
@@ -222,7 +222,7 @@ int printClientList(struct list *head) {
 
 int terminateClient(int id) {
 
-    struct host *host = getNodeByID(clientList, id);
+    struct host *host = getHostByID(clientList, id);
     if (host == NULL) {
         printf("No client found with given id.\n", id);
         return 0;
