@@ -469,6 +469,8 @@ int putFile(int connectionId, char *filename) {
         return -2;
     }
 
+    printf("Starting to send file: %s at %s.\n", justFilename, printCurrentTime());
+
     //Read data for first packet
     char buff[PACKET_SIZE];
     int data_read = 0;
@@ -521,7 +523,7 @@ int putFile(int connectionId, char *filename) {
         pckt = NULL;
 
     }
-    printf("File: %s sent. Size %d bytes.\n", justFilename, data_read);
+    printf("Completed sending file: %s at %s. Size %d bytes.\n", justFilename, printCurrentTime(), data_read);
 
     //send a ok message to indicate completion.
     pckt = packetBuilder(ok, justFilename, 0, "");
@@ -611,8 +613,8 @@ int receiveFileAsynchronously(int connectionId, struct packet *recvPacket)
     struct host *source = (struct host *) connection->value;
 
     if (connection->filePointer == NULL) {
-        printf("Receiving file: %s from client: %s/%s.\n",
-               recvPacket->header->fileName, source->ipAddress, source->port);
+        printf("Started receiving file: %s at %s from client: %s/%s.\n",
+               recvPacket->header->fileName, printCurrentTime(), source->ipAddress, source->port);
 
         // Create file where data will be stored
         char *filename = recvPacket->header->fileName;
@@ -645,12 +647,17 @@ int okPacketHandler(int connectionId, struct packet *recvPacket)
     struct list *connection = getNodeByID(connectionList, connectionId);
     struct host *source = (struct host *) connection->value;
 
-    //print completion of file download
-    printf("File %s download complete.\n", recvPacket->header->fileName);
-    //close the file pointer
-    fclose(connection->filePointer);
-    //make the file pointer in the connection to indicate that no file operation is in progress
-    connection->filePointer = NULL;
+    if (connection->filePointer != NULL) {
+        //print completion of file download
+        printf("Finished receiving file: %s at %s from client: %s/%s.\n",
+               recvPacket->header->fileName, printCurrentTime(), source->hostName, source->port);
+
+        //close the file pointer
+        fclose(connection->filePointer);
+
+        //make the file pointer in the connection to indicate that no file operation is in progress
+        connection->filePointer = NULL;
+    }
     return 0;
 }
 

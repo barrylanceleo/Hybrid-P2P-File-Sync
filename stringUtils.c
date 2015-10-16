@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <time.h>
 #include "stringUtils.h"
 
 char *stringConcat(char *string1, char *string2) {
@@ -53,31 +54,6 @@ bool stringEquals(char *string1, char *string2) {
     }
 }
 
-char *intToString(int number) {
-    //find the number of digits
-    int tempNum = number;
-    int length = 1;
-    while (tempNum / 10 != 0) {
-        length++;
-        tempNum /= 10;
-    }
-
-    char *numberString = (char *) malloc(sizeof(char) * (length + 1));
-
-    int index = 0;
-    while (number / 10 != 0) {
-        //strore the digits in reverse order
-        numberString[length - index - 1] = number % 10 + '0';
-        //printf("length %d index %d \n",length, index);
-        index++;
-        number /= 10;
-    }
-    numberString[length - index - 1] = number + '0';
-    numberString[length] = 0;
-
-    return numberString;
-}
-
 char **splitString(char *input, char delimiter, int *outputSize) {
     char **output;
     char *inputCopy = (char *) malloc((strlen(input) + 1) * sizeof(char));
@@ -115,4 +91,12 @@ char **splitString(char *input, char delimiter, int *outputSize) {
         }
     }
     return output;
+}
+
+char *printCurrentTime()
+{
+    char time_string[100];
+    time_t current_time = time(0);
+    strftime(time_string, 100, "%H:%M:%S", localtime(&current_time));
+    return strdup(time_string);
 }
