@@ -111,21 +111,29 @@ struct connectionInfo *startServer(char *port, char *hostType) {
         fprintf(stderr, "Error Creating socket: %d %s\n", listernerSockfd, gai_strerror(listernerSockfd));
         return NULL;
     } else {
-        printf("Created Socket.\n");
+        //printf("Created Socket.\n");
     }
 
-    if (stringEquals(hostType,
-                     "SERVER")) //binding to port only for server, this is only for testing need to bind for client too in production
-    {
-        int bindStatus;
+    int bindStatus;
 
-        if ((bindStatus = bind(listernerSockfd, serverAddressInfo->ai_addr, serverAddressInfo->ai_addrlen)) == -1) {
-            fprintf(stderr, "Error binding %d %s\n", bindStatus, gai_strerror(bindStatus));
-            return NULL;
-        } else {
-            printf("Done binding socket to port %s.\n", port);
-        }
+    if ((bindStatus = bind(listernerSockfd, serverAddressInfo->ai_addr, serverAddressInfo->ai_addrlen)) == -1) {
+        fprintf(stderr, "Error binding %d %s\n", bindStatus, gai_strerror(bindStatus));
+        return NULL;
+    } else {
+        //printf("Done binding socket to port %s.\n", port);
     }
+
+//    if (stringEquals(hostType, "SERVER")) //binding to port only for server, this is only for testing need to bind for client too in production
+//    {
+//        int bindStatus;
+//
+//        if ((bindStatus = bind(listernerSockfd, serverAddressInfo->ai_addr, serverAddressInfo->ai_addrlen)) == -1) {
+//            fprintf(stderr, "Error binding %d %s\n", bindStatus, gai_strerror(bindStatus));
+//            return NULL;
+//        } else {
+//            printf("Done binding socket to port %s.\n", port);
+//        }
+//    }
 
     int listenStatus;
 
@@ -151,7 +159,7 @@ struct connectionInfo *startServer(char *port, char *hostType) {
     //updating global variable name and myIpAddress
     // getIPAddress(&listenerAddress) returns 0.0.0.0 hence getting ip using the hostname
     myHostName = (char *) malloc(sizeof(char) * 128);
-    gethostname(myHostName, sizeof myHostName);
+    gethostname(myHostName, 128);
     myIpAddress = getIpfromHost(myHostName);
 
     //build the serverInfo structure to be retunrned
@@ -171,19 +179,32 @@ struct packet *readPacket(int sockfd) {
     packet->header = header;
 
     //start receiving packet
+
+    //receive 2 bytes for message type
     int bytes_received = recv(sockfd, buffer, 2, 0);
+    //printf("Bytes of message Type received: %d", bytes_received);
+    if (bytes_received != 2) {
+        char buffer2[2];
+        bytes_received += recv(sockfd, buffer2, 1, 0);
+        buffer[1] = buffer2[0];
+        if (bytes_received != 2) {
+            fprintf(stderr, "Error while reading package hearder. Can't proceed.\n");
+            exit(-1);
+        }
+
+    }
     buffer[bytes_received] = 0;
     if (bytes_received == 0) {
-        printf("Recevied zero bytes. Probably because someone terminated.\n");
+        //printf("Recevied zero bytes. Probably because someone terminated.\n");
         return NULL;
     }
-    printf("Message Type: %s, bytes received: %d\n", buffer, bytes_received);
+    //printf("Message Type: %s, bytes received: %d\n", buffer, bytes_received);
     packet->header->messageType = atoi(buffer);
-    printf("Received a packet of type: %d\n", packet->header->messageType);
+    //printf("Received a packet of type: %d\n", packet->header->messageType);
     bytes_received = recv(sockfd, buffer, 1, 0); //discard the delimiter
     //receive the message length
     bytes_received = recv(sockfd, buffer, 1, 0); //first character of length
-    printf("Received byte : %d\n", bytes_received);
+    //printf("Received byte : %d\n", bytes_received);
     char length[PACKET_SIZE];
     int index = 0;
     while (buffer[0] != delimiter) {
@@ -235,10 +256,12 @@ struct packet *readPacket(int sockfd) {
             message[i] = buffer[i - (messageLength - bytes_received)];
         }
 
-        //message = stringConcat(message, buffer);
-        printf("Bytes of message received: %d Buffer: %s\n", bytes_received, buffer);
+        //printf("Bytes of message received: %d Buffer: %s\n", bytes_received, buffer);
         message_lenght_to_be_received -= bytes_received;
     } while (message_lenght_to_be_received > 0);
+    message = realloc(message, messageLength + 1);
+    message[messageLength] = 0;
+    //printf("Bytes of message received: %d Buffer: %s\n", messageLength, message);
 
 //    char *message = "";
 //    while (message_lenght_to_be_received > PACKET_SIZE) {
@@ -251,6 +274,6 @@ struct packet *readPacket(int sockfd) {
 //    printf("Buffer: %s, Buffer Size: %d\n", buffer, sizeof(buffer));
     //message = stringConcat(message, buffer);
     packet->message = message;
-    printf("Message: %s\n", packet->message);
+    //printf("Message: %s\n", packet->message);
     return packet;
 }

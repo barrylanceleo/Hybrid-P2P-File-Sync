@@ -13,6 +13,37 @@ int fdmax; //to hold the max file descriptor value
 int connectionIdGenerator; //index for connections
 int listernerSockfd; //my listener fd
 
+int broadcastClientList()
+{
+    if (clientList == NULL) {
+        fprintf(stdout, "There are no clients registered.\n");
+        return 0;
+    }
+
+    //build the broadcast message
+    char *message = "";
+    struct list *current = clientList;
+    struct host *currentHost = (struct host *) current->value;
+    message = stringConcat(message, currentHost->ipAddress);
+    message = stringConcat(message, " ");
+    message = stringConcat(message, currentHost->port);
+    current = current->next;
+    while (current != NULL) {
+        currentHost = (struct host *) current->value;
+        message = stringConcat(message, " ");
+        message = stringConcat(message, currentHost->ipAddress);
+        message = stringConcat(message, " ");
+        message = stringConcat(message, currentHost->port);
+        current = current->next;
+    }
+    //build packet
+    //printf("Broadcast Message: %s", message);
+    struct packet *pckt = packetBuilder(hostList, NULL, strlen(message), message);
+    char *packetString = packetDecoder(pckt);
+    //printf("Broadcast packet: %s\n", packetString);
+    broadcastToAllClients(clientList, packetString);
+}
+
 int broadcastToAllClients(struct list *clientList, char *msg) {
     struct list *current = clientList;
     if (current == NULL) {
@@ -100,7 +131,7 @@ int runServer(char *port) {
                         // receive the port sent by the client
                         struct packet *recvPacket = readPacket(clientsockfd);
                         if (recvPacket == NULL) {
-                            //printf("Recevied zero bytes. Probably because someone terminated.\n");
+                            //printf("Received zero bytes. Probably because someone terminated.\n");
                             break;
                         }
 //                        printf("Received packet: ");
@@ -121,34 +152,11 @@ int runServer(char *port) {
                         if (client->sockfd > fdmax) {
                             fdmax = client->sockfd;
                         }
-                        printf("Registered client: %s %s/%s\n", client->hostName,
-                               client->ipAddress, client->port);
+                        printf("Registered client: %s/%s\n", client->hostName, client->port);
                         free(recvPacket);
 
                         //Broadcast the client list to all the registered clients
-                        //build the broadcast message
-                        char *message = "";
-                        struct list *current = clientList;
-                        struct host *currentHost = (struct host *) current->value;
-                        message = stringConcat(message, currentHost->ipAddress);
-                        message = stringConcat(message, " ");
-                        message = stringConcat(message, currentHost->port);
-                        current = current->next;
-                        while (current != NULL) {
-                            currentHost = (struct host *) current->value;
-                            message = stringConcat(message, " ");
-                            message = stringConcat(message, currentHost->ipAddress);
-                            message = stringConcat(message, " ");
-                            message = stringConcat(message, currentHost->port);
-                            current = current->next;
-                        }
-                        //build packet
-                        //printf("Broadcast Message: %s", message);
-                        struct packet *pckt = packetBuilder(hostList, NULL, strlen(message), message);
-                        char *packetString = packetDecoder(pckt);
-                        //printf("Broadcast packet: %s\n", packetString);
-                        broadcastToAllClients(clientList, packetString);
-                        //printList(clientList);
+                        broadcastClientList();
                     }
                 }
                 else // handle data from clients
@@ -159,8 +167,8 @@ int runServer(char *port) {
                         //one of the clients terminated unexpectedly
                         int id = getIDForFD(clientList, fd);
                         struct host *host = getHostByID(clientList, id);
-                        printf("Cient: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
-                               host->ipAddress, host->port, host->sockfd);
+                        printf("Cient: %s/%s terminated unexpectedly. Removing it from the list.\n",
+                               host->ipAddress, host->port);
                         terminateClient(id);
                         continue;
                     }
@@ -171,7 +179,8 @@ int runServer(char *port) {
                     //received terminate
                     if (recvPacket->header->messageType == terminate) {
                         int id = getIDForFD(clientList, fd);
-                        printf("Received Terminate command from \n");
+                        struct host *host = getHostByID(clientList, id);
+                        printf("Received Terminate command from %s/%s.\n", host->hostName, host->port);
                         terminateClient(id);
                         continue;
                     }
@@ -183,8 +192,9 @@ int runServer(char *port) {
 
                     if (recvPacket->header->messageType == syncFiles) {
                         int connectionId = getIDForFD(clientList, fd);
-                        printf("Received a sync request from client %d. "
-                                       "Broacasting message to all registered clients.\n", connectionId);
+                        struct host *host = getHostByID(clientList, connectionId);
+                        printf("Received a sync request from client %%s/%s. "
+                                       "Broacasting message to all registered clients.\n", host->hostName, host->port);
 
                         //build a sync packet
                         struct packet *packet = packetBuilder(syncFiles, NULL, 0, NULL);
@@ -193,7 +203,7 @@ int runServer(char *port) {
 
                         //send sync message to all clients
                         broadcastToAllClients(clientList, packetString);
-                        printf("Sync request sent to all clients.\n");
+                        printf("Sent Sync request to all registered clients.\n");
                         continue;
                     }
                 }
@@ -209,11 +219,11 @@ int printClientList(struct list *head) {
         return 0;
     }
     else {
-        printf("id:\t\tHostname\t\tIP Address\t\tPort No.\t\tSock FD\n");
+        printf("id:\tHostname\t\t\tIP Address\t\tPort No.\n");
         do {
             struct host *currenthost = (struct host *) current->value;
-            printf("%d: \t\t%s\t\t%s\t\t%s\t\t%d\n", currenthost->id, currenthost->hostName, currenthost->ipAddress,
-                   currenthost->port, currenthost->sockfd);
+            printf("%d:\t%s\t%s\t\t%s\n", currenthost->id, currenthost->hostName, currenthost->ipAddress,
+                   currenthost->port);
             current = current->next;
         } while (current != NULL);
     }
@@ -224,7 +234,7 @@ int terminateClient(int id) {
 
     struct host *host = getHostByID(clientList, id);
     if (host == NULL) {
-        printf("No client found with given id.\n", id);
+        printf("No client found with given id: %d.\n", id);
         return 0;
     }
 
@@ -240,16 +250,18 @@ int terminateClient(int id) {
     close(host->sockfd);
     FD_CLR(host->sockfd, &masterFDList);
     clientList = removeNodeById(clientList, id);
-    if (clientList == NULL) {
-        printf("Got empty client list\n");
-    }
+//    if (clientList == NULL) {
+//        printf("Got empty client list\n");
+//    }
     // printf("Closed SockFd: %d\n", host->sockfd);
+    //broadcast updated list to all clients
+    broadcastClientList();
     return 0;
 }
 
 void quitServer() {
     if (clientList == NULL) {
-        printf("No clients connected.\nQuitting Master Server.\n");
+        printf("Bye!\n");
         exit(0);
     }
 
@@ -274,6 +286,6 @@ void quitServer() {
     } while (current != NULL);
     close(listernerSockfd);
     free(clientList);
-    printf("Quitting Master Server.\n");
+    printf("Bye!\n");
     exit(0);
 }

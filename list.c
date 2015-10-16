@@ -59,19 +59,19 @@ struct list *removeNodeById(struct list *hostList, int id) {
     }
     else if (current->next == NULL) {
         if (currenthost->id == id) {
-            printf("First Node Host ID: %d Given ID: %d\n", currenthost->id, id);
+            //printf("First Node Host ID: %d Given ID: %d\n", currenthost->id, id);
             return current->next;
         }
     }
     else {
         if (currenthost->id == id) {
-            printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
+            //printf("Host ID: %d Given ID: %d\n", currenthost->id, id);
             return current->next;
         }
         struct list *next = current->next;
         struct host *nexthost = (struct host *) next->value;
         do {
-            printf("Host ID: %d Given ID: %d\n", nexthost->id, id);
+            //printf("Host ID: %d Given ID: %d\n", nexthost->id, id);
             if (nexthost->id == id) {
                 current->next = next->next;
                 return hostList;
@@ -84,14 +84,14 @@ struct list *removeNodeById(struct list *hostList, int id) {
 
 //checks if hostname/port or ipaddress/port is present in the list
 bool isHostPresent(struct list *hostList, char *ipAddress, char *port) {
-    char *hostName = getHostFromIp(ipAddress);
+    //char *hostName = getHostFromIp(ipAddress);
     struct list *current = hostList;
     if (current == NULL) {
         return false;
     }
     while (current != NULL) {
         struct host *currentHost = (struct host *) (current->value);
-        if ((stringEquals(ipAddress, currentHost->ipAddress) || stringEquals(hostName, currentHost->hostName))
+        if ((stringEquals(ipAddress, currentHost->ipAddress) || stringEquals(ipAddress, currentHost->hostName))
             && stringEquals(port, currentHost->port)) {
             return true;
         }

@@ -26,34 +26,6 @@ char *packetDecoder(struct packet *packet) {
     return packetMessage;
 }
 
-struct packet *packetEncoder(char *packetString) {
-    int outputsize;
-    char **parts = splitString(packetString, '^', &outputsize);
-    struct header *head = (struct header *) malloc(sizeof(struct header));
-    struct packet *packet = (struct packet *) malloc(sizeof(struct packet));
-    packet->header = head;
-    packet->header->messageType = atoi(parts[0]);
-    if (packet->header->messageType == put || packet->header->messageType == get ||
-            packet->header->messageType == syncFiles) {
-        packet->header->fileName = parts[1];
-        packet->header->length = atoi(parts[2]);
-        packet->message = parts[3];
-    }
-    else if (packet->header->messageType == ok || packet->header->messageType == terminate) {
-        packet->header->length = atoi(parts[1]);
-        packet->message = "";
-    }
-    else {
-        packet->header->length = atoi(parts[1]);
-        packet->message = parts[3];
-    }
-
-    if (strlen(packet->message) > packet->header->length) {
-        fprintf(stderr, "Length of message is longer than length specified in header");
-    }
-    return packet;
-}
-
 struct packet *packetBuilder(enum messageTypes messageType, char *fileName,
                              int length, char *message) {
     struct header *header = (struct header *) malloc(sizeof(struct header));

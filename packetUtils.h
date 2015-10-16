@@ -35,8 +35,6 @@ struct packet *packetBuilder(enum messageTypes messageType, char *fileName,
 
 char *packetDecoder(struct packet *packet);
 
-struct packet *packetEncoder(char *packetString);
-
 int printPacket(struct packet *packet);
 
 int deletePacketAndMessage(struct packet *pckt);

@@ -45,7 +45,7 @@ int handleCommands(char *command, char *hostType) {
             printf("This is the master server. Only the clients can register to the server\n");
         }
         else {
-            printf("Registering to Server: %s/%s \n", commands[1], commands[2]);
+            //printf("Registering to Server: %s/%s \n", commands[1], commands[2]);
             registerToServer(commands[1], commands[2]);
         }
     }
@@ -54,7 +54,7 @@ int handleCommands(char *command, char *hostType) {
             printf("This is the master server. Only the clients can connect to other clients\n");
         }
         else {
-            printf("Connecting to client\n");
+            //printf("Connecting to client\n");
             connectToClient(commands[1], commands[2]);
         }
     }
@@ -79,7 +79,7 @@ int handleCommands(char *command, char *hostType) {
             quitServer();
         }
         else {
-            printf("Quitting Client.\n");
+            //printf("Quitting Client.\n");
             quitClient();
         }
     }
@@ -112,7 +112,6 @@ int handleCommands(char *command, char *hostType) {
             printf("Sending ....\n");
             struct packet *packet = packetBuilder(message, NULL, strlen(commands[2]), commands[2]);
             char *packetString = packetDecoder(packet);
-            printf("Packet: %s", packet);
             struct host *destination = getHostByID(clientList, atoi(commands[1]));
             send(destination->sockfd, packetString, strlen(packetString), 0);
         }
@@ -121,13 +120,6 @@ int handleCommands(char *command, char *hostType) {
         }
     }
     else {
-        char *packetMessage;
-        int a = 2;
-        int b = 0;
-        char *c = NULL;
-        char *d = NULL;
-        asprintf(&packetMessage, "%02d^%d^%s^%s", a, b, NULL, d);
-        printf("Packet: %s\n", packetMessage);
         printf("Unsupported Command. Type \"help\" for help\n");
     }
     return 0;
@@ -143,11 +135,11 @@ int main(int argc, char *argv[]) {
     }
 
     if (stringEquals(argv[1], "s") || stringEquals(argv[1], "server")) {
-        printf("Starting server..\n");
+        printf("Starting server...\n");
         runServer(port);
     }
     else if (stringEquals(argv[1], "c") || stringEquals(argv[1], "client")) {
-        printf("Starting client..\n");
+        printf("Starting client...\n");
         runClient(port);
     }
     else {

@@ -45,10 +45,18 @@ int runClient(char *port) {
     if (listernerSockfd > fdmax)
         fdmax = listernerSockfd;
 
+
+    int actionComplete = 1;
     while (1) //keep waiting for input, connections and data
     {
-        printf("$");
-        fflush(stdout); //print the terminal symbol
+
+        //this is ti identify is an activity is in progress
+        if (actionComplete == 1) {
+            printf("$");
+            fflush(stdout); //print the terminal symbol
+        }
+        actionComplete = 1;
+
         tempFDList = masterFDList; //make a copy of masterFDList and use it as select() modifies the list
 
         //int select(int numfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
@@ -98,8 +106,7 @@ int runClient(char *port) {
                         FD_SET(client->sockfd, &masterFDList); // add fd to fdlist
                         if (client->sockfd > fdmax)
                             fdmax = client->sockfd;
-                        printf("Accepted client: %s %s on port: %s\n", client->hostName,
-                               client->ipAddress, client->port);
+                        printf("Accepted client: %s/%s.\n", client->hostName, client->port);
 
                     }
 
@@ -123,7 +130,7 @@ int runClient(char *port) {
 
                     //received terminate from server
                     if (recvPacket->header->messageType == terminate) {
-                        printf("Received TERMINATE from server.\n");
+                        printf("Received TERMINATE command from server.\n");
                         int id = getIDForFD(connectionList, fd);
                         terminateClient(id);
                         peerList = NULL;
@@ -174,8 +181,8 @@ int runClient(char *port) {
                         //one of the clients terminated unexpectedly
                         int id = getIDForFD(connectionList, fd);
                         struct host *host = getHostByID(connectionList, id);
-                        printf("Peer: %s/%s Sock FD:%d terminated unexpectedly. Removing it from the list.\n",
-                               host->ipAddress, host->port, host->sockfd);
+                        printf("Peer: %s/%s terminated unexpectedly. Removing it from the list.\n",
+                               host->hostName, host->port, host->sockfd);
                         terminateConnection(id);
                         continue;
                     }
@@ -185,8 +192,9 @@ int runClient(char *port) {
 
                     //received terminate
                     if (recvPacket->header->messageType == terminate) {
-                        printf("Received TERMINATE\n");
                         int id = getIDForFD(connectionList, fd);
+                        struct host *source = getHostByID(connectionList, id);
+                        printf("Received TERMINATE command from %s/%s. Removing it.\n", source->hostName, source->port);
                         terminateConnection(id);
                         continue;
                     }//handle error message
@@ -202,18 +210,19 @@ int runClient(char *port) {
                             continue;
                         }
                         printf("Received a get request for file %s from client: %s/%s.\n",
-                               recvPacket->header->fileName, destination->ipAddress, destination->port);
-
+                               recvPacket->header->fileName, destination->hostName, destination->port);
                         sendFile(connectionId, recvPacket->header->fileName);
                     }//hand a put packet
                     else if (recvPacket->header->messageType == put) {
                         int connectionId = getIDForFD(connectionList, fd);
                         receiveFileAsynchronously(connectionId, recvPacket);
+                        actionComplete = 0; //action is not complete until a ok packet is received
                         continue;
                     }//handle a ok packet
                     else if (recvPacket->header->messageType == ok) {
                         int connectionId = getIDForFD(connectionList, fd);
                         okPacketHandler(connectionId, recvPacket);
+                        actionComplete = 1; // activity completed
                         continue;
                     }
 
@@ -226,7 +235,6 @@ int runClient(char *port) {
 int connectToHost(char *hostName, char *port) //connects to give ipaddress or hostname/portnumber
 // adds the sock fd masterFDList and returns the sockfd
 {
-    // check if getAddressInfo() handles both hostname and ipaddress #needtomodify
     struct addrinfo *serverAddressInfo = getAddressInfo(hostName, port);
     if (serverAddressInfo == NULL) {
         return -1;
@@ -241,7 +249,7 @@ int connectToHost(char *hostName, char *port) //connects to give ipaddress or ho
         fprintf(stderr, "Error Creating socket: %d %s\n", clientSocketfd, gai_strerror(clientSocketfd));
         return -1;
     } else {
-        printf("Created Socket.\n");
+        //printf("Created Socket.\n");
     }
 
     int connectStatus;
@@ -252,7 +260,7 @@ int connectToHost(char *hostName, char *port) //connects to give ipaddress or ho
         return -1;
     }
     else {
-        printf("Connected to %s.\n", hostName); //#needtomodify this looks like a hack
+        //printf("Connected to %s.\n", hostName); //#needtomodify this looks like a hack
         FD_SET(clientSocketfd, &masterFDList); // add clientSocketfd to master FD list
         if (clientSocketfd > fdmax)
             fdmax = clientSocketfd;
@@ -262,8 +270,8 @@ int connectToHost(char *hostName, char *port) //connects to give ipaddress or ho
 }
 
 int registerToServer(char *hostName, char *port) {
-    hostName = "localhost"; //for testing on local machine #needtomodify
-    printf("Registering to Server %s/%s\n", hostName, port);
+    //hostName = "localhost"; //for testing on local machine #needtomodify
+    printf("Registering to Server %s/%s.\n", hostName, port);
     if (masterServer != NULL) {
         printf("The client is already registered to the master server.\n");
         return 0;
@@ -277,7 +285,7 @@ int registerToServer(char *hostName, char *port) {
         masterServer = (struct host *) malloc(sizeof(struct host));
         masterServer->id = 1;
         masterServer->hostName = hostName;
-        masterServer->ipAddress = getIpfromHost("127.0.0.1"); // change to hostName
+        masterServer->ipAddress = getIpfromHost(hostName); // change to hostName
         masterServer->port = port;
         masterServer->sockfd = serversockfd;
         addNode(&connectionList, masterServer);
@@ -289,7 +297,7 @@ int registerToServer(char *hostName, char *port) {
         //printf("Port Packet: %s\n", packetString);
         int bytes_sent = send(masterServer->sockfd, packetString, strlen(packetString), 0);
         if (bytes_sent != -1) {
-            printf("Sent the listerner port %s to the server.\n", message);
+            //printf("Sent the listerner port %s to the server.\n", message);
         }
         free(pckt);
     }
@@ -298,23 +306,34 @@ int registerToServer(char *hostName, char *port) {
 
 int connectToClient(char *hostName, char *port) {
 
-    //Check if hostname/ip and port is registered to server
-//    if(!isHostPresent(peerList, "localhost", port))
-//    {
-//        printf("This client you are trying to connect to is not registered with the server.\n");
-//        return -1;
-//    }
-
-    //check if hostName given was in fact an ipaddress
-    char *tempHostName = getHostFromIp(hostName);
-    if (!stringEquals(tempHostName, "invalid Ip")) {
-        //hostName is a valid ipaddress
-        hostName = tempHostName;
+    //check if the host is trying to connect to itself
+    if ((stringEquals(hostName, myHostName) || stringEquals(hostName, myIpAddress))
+        && (stringEquals(port, myListenerPort))) {
+        printf("You can't connect to yourself.\n");
+        return -1;
     }
 
-    printf("connecting to Hostname: %s Port: %s\n", hostName, port);
+    //Check if hostname/ip and port is registered to server
+    if (!isHostPresent(peerList, hostName, port)) {
+        printf("The client you are trying to connect to is not registered with the server.\n");
+        return -1;
+    }
 
-    int clientSockfd = connectToHost("localhost", port); //"localhost" should be hostName #needtomodify
+    //duplicate connection
+    if (isHostPresent(connectionList, hostName, port)) {
+        printf("You are already connected to %s/%s.\n", hostName, port);
+        return -1;
+    }
+
+    //check if the user entered a ipAddress or hostName
+    if (stringEquals(getIpfromHost(hostName), hostName)) {
+        //if true the user entered an ipaddress
+        hostName = getHostFromIp(hostName);
+    }
+
+    //printf("Connecting to %s/%s.\n", hostName, port);
+
+    int clientSockfd = connectToHost(hostName, port); //"localhost" should be hostName #needtomodify
     if (clientSockfd == -1) {
         fprintf(stderr, "Error connecting to client\n");
     }
@@ -327,8 +346,7 @@ int connectToClient(char *hostName, char *port) {
         client->hostName = hostName;
         client->port = port;
         addNode(&connectionList, client);
-        printf("Connected to client: %s on port: %s\n", client->hostName,
-               client->port);
+        printf("Connected to %s/%s\n", client->hostName, client->port);
     }
     return 0;
 }
@@ -340,11 +358,11 @@ int printConnectionList(struct list *head) {
         return 0;
     }
     else {
-        printf("id:\t\tHostname\t\tIP Address\t\tPort No.\t\tSock FD\n");
+        printf("id:\tHostname\t\t\tIP Address\t\tPort No.\n");
         do {
             struct host *currenthost = (struct host *) current->value;
-            printf("%d: \t\t%s\t\t%s\t\t%s\t\t%d\n", currenthost->id, currenthost->hostName,
-                   currenthost->ipAddress, currenthost->port, currenthost->sockfd);
+            printf("%d:\t%s\t%s\t\t%s\n", currenthost->id, currenthost->hostName,
+                   currenthost->ipAddress, currenthost->port);
             current = current->next;
         } while (current != NULL);
     }
@@ -354,14 +372,14 @@ int printConnectionList(struct list *head) {
 int printPeerList(struct list *head) {
     struct list *current = head;
     if (current == NULL) {
-        fprintf(stdout, "There are no connections at the moment.\n");
+        fprintf(stdout, "There are no other clients registered to the server at the moment.\n");
         return 0;
     }
     else {
-        printf("Hostname\t\tIP Address\t\tPort No.\n");
+        printf("Hostname\t\t\tIP Address\tPort No.\n");
         do {
             struct host *currenthost = (struct host *) current->value;
-            printf("%s\t\t%s\t\t%s\n", currenthost->hostName,
+            printf("%s\t%s\t%s\n", currenthost->hostName,
                    currenthost->ipAddress, currenthost->port);
             current = current->next;
         } while (current != NULL);
@@ -388,16 +406,17 @@ int terminateConnection(int connectionId) {
     close(host->sockfd);
     FD_CLR(host->sockfd, &masterFDList);
     connectionList = removeNodeById(connectionList, connectionId);
-    if (connectionList == NULL) {
-        printf("Got empty connection list\n");
-    }
-    //printf("Closed SockFd: %d\n", host->sockfd);
+    masterServer = NULL;
+//    if (connectionList == NULL) {
+//        printf("Got empty connection list\n");
+//    }
+    printf("Terminated Connection %d with %s/%s.\n", connectionId, host->hostName, host->port);
     return 0;
 }
 
 void quitClient() {
     if (connectionList == NULL) {
-        printf("Not connected to any peer.\n");
+        printf("Bye!\n");
         exit(0);
     }
 
@@ -421,6 +440,7 @@ void quitClient() {
         current = current->next;
     } while (current != NULL);
     free(connectionList);
+    printf("Bye!\n");
     exit(0);
 }
 
@@ -493,7 +513,7 @@ int putFile(int connectionId, char *filename) {
 
     //send the data separately as is it is not text
     int data_bytes_sent = send(destination->sockfd, buff, bytes_read, 0);
-    printf("Number of bytes sent: %d\n", header_bytes_sent + data_bytes_sent);
+    //printf("Number of bytes sent: %d\n", header_bytes_sent + data_bytes_sent);
     free(pckt);
     pckt = NULL;
 
@@ -512,18 +532,18 @@ int putFile(int connectionId, char *filename) {
         data_read += bytes_read;
         pckt = packetBuilder(put, justFilename, bytes_read, "");
         packetString = packetDecoder(pckt);
-        printf("Packet String: %s\n", packetString);
+        //printf("Packet String: %s\n", packetString);
 //        printPacket(pckt);
         header_bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
 
         //send the data separately as it is not text
         data_bytes_sent = send(destination->sockfd, buff, bytes_read, 0);
-        printf("Number of bytes sent: %d\n", data_bytes_sent);
+        //printf("Number of bytes sent: %d\n", data_bytes_sent);
         free(pckt);
         pckt = NULL;
 
     }
-    printf("Completed sending file: %s at %s. Size %d bytes.\n", justFilename, printCurrentTime(), data_read);
+    printf("Completed sending file: %s at %s.\n", justFilename, printCurrentTime());
 
     //send a ok message to indicate completion.
     pckt = packetBuilder(ok, justFilename, 0, "");
@@ -531,7 +551,7 @@ int putFile(int connectionId, char *filename) {
 //    printf("OK Packet String: %s\n", packetString);
 //    printPacket(pckt);
     int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
-    printf("ok packet Number of bytes sent: %d\n", bytes_sent);
+    //printf("ok packet Number of bytes sent: %d\n", bytes_sent);
     return 0;
 }
 
@@ -556,9 +576,10 @@ int sendFile(int connectionId, char *filename) // this is include the error mess
         //unable to open file send an error message to the requester.
         char *errorMessage;
         asprintf(&errorMessage, "%s", strerror(errno));
+        //printf("%s:%s:%d\n", errorMessage, strerror(errno), strlen(errorMessage));
         struct packet *pckt = packetBuilder(error, justFilename, strlen(errorMessage), errorMessage);
         char *packetString = packetDecoder(pckt);
-//        printf("Packet String: %s\n", packetString);
+        //printf("Packet String: %s\n", packetString);
 //        printPacket(pckt);
         int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
         return -2;
@@ -579,12 +600,12 @@ int sendFile(int connectionId, char *filename) // this is include the error mess
 int receiveFileASynchronously(int connectionId, struct packet *recvPacket)
 {
     struct host *source = getHostByID(connectionList, connectionId);
-    printf("Receiving file: %s from client: %s/%s.\n",
-           recvPacket->header->fileName, source->ipAddress, source->port);
+    printf("Receiving file: %s from %s/%s.\n",
+           recvPacket->header->fileName, source->hostName, source->port);
 
     // Create file where data will be stored
     char *filename = recvPacket->header->fileName;
-    char *tempfilename = stringConcat("/home/barry/Dropbox/Projects/PeerSync/received_files_2/", filename);
+    char *tempfilename = stringConcat("./", filename);
     FILE *fp = fopen(tempfilename, "wb"); //for testing it should be filename
     if (fp == NULL) {
         printf("Error opening file.\n");
@@ -613,12 +634,12 @@ int receiveFileAsynchronously(int connectionId, struct packet *recvPacket)
     struct host *source = (struct host *) connection->value;
 
     if (connection->filePointer == NULL) {
-        printf("Started receiving file: %s at %s from client: %s/%s.\n",
-               recvPacket->header->fileName, printCurrentTime(), source->ipAddress, source->port);
-
+        printf("Started receiving file: %s at %s from %s/%s.\n$",
+               recvPacket->header->fileName, printCurrentTime(), source->hostName, source->port);
+        fflush(stdout);
         // Create file where data will be stored
         char *filename = recvPacket->header->fileName;
-        char *tempfilename = stringConcat("/home/barry/Dropbox/Projects/PeerSync/received_files_2/", filename);
+        char *tempfilename = stringConcat("./", filename);
         FILE *fp = fopen(tempfilename, "wb"); //for testing it should be filename
         if (fp == NULL) {
             printf("Error opening file.\n");
@@ -649,7 +670,7 @@ int okPacketHandler(int connectionId, struct packet *recvPacket)
 
     if (connection->filePointer != NULL) {
         //print completion of file download
-        printf("Finished receiving file: %s at %s from client: %s/%s.\n",
+        printf("Finished receiving file: %s at %s from %s/%s.\n",
                recvPacket->header->fileName, printCurrentTime(), source->hostName, source->port);
 
         //close the file pointer
@@ -683,7 +704,7 @@ int syncHostnameFiles()
 {
 
     //open current directory and send all files to all the connected peers
-    char *directory = "/home/barry/Dropbox/Projects/PeerSync/files_to_be_sent/";
+    char *directory = "./";
     char *filename = stringConcat(myHostName, ".txt");
 
     //send file for all peers in connectionList
@@ -709,7 +730,7 @@ int syncAll() {
     //open current directory and send all files to all the connected peers
     DIR *d;
     struct dirent *dir;
-    char *directory = "/home/barry/Dropbox/Projects/PeerSync/files_to_be_sent/";
+    char *directory = "./";
     char *filename = "";
     d = opendir(directory);
     if (d != NULL) {
