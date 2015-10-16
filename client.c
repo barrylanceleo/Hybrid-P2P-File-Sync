@@ -482,11 +482,18 @@ int putFile(int connectionId, char *filename) {
         fclose(fp);
         return -3;
     }
-    struct packet *pckt = packetBuilder(put, justFilename, bytes_read, buff);
+    struct packet *pckt = packetBuilder(put, justFilename, bytes_read, "");
     char *packetString = packetDecoder(pckt);
+
 //    printf("Packet String: %s\n", packetString);
 //    printPacket(pckt);
-    int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+    int header_bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+
+    //send the data separately as is it is not text
+    int data_bytes_sent = send(destination->sockfd, buff, bytes_read, 0);
+    printf("Number of bytes sent: %d\n", header_bytes_sent + data_bytes_sent);
+    free(pckt);
+    pckt = NULL;
 
     //check if there is more data if so send them in packets
     while (true) {
@@ -501,11 +508,18 @@ int putFile(int connectionId, char *filename) {
         if (bytes_read < PACKET_SIZE)
             buff[bytes_read] = 0;
         data_read += bytes_read;
-        pckt = packetBuilder(put, justFilename, bytes_read, buff);
+        pckt = packetBuilder(put, justFilename, bytes_read, "");
         packetString = packetDecoder(pckt);
-//        printf("Packet String: %s\n", packetString);
+        printf("Packet String: %s\n", packetString);
 //        printPacket(pckt);
-        bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+        header_bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+
+        //send the data separately as it is not text
+        data_bytes_sent = send(destination->sockfd, buff, bytes_read, 0);
+        printf("Number of bytes sent: %d\n", data_bytes_sent);
+        free(pckt);
+        pckt = NULL;
+
     }
     printf("File: %s sent. Size %d bytes.\n", justFilename, data_read);
 
@@ -514,7 +528,8 @@ int putFile(int connectionId, char *filename) {
     packetString = packetDecoder(pckt);
 //    printf("OK Packet String: %s\n", packetString);
 //    printPacket(pckt);
-    bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+    int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
+    printf("ok packet Number of bytes sent: %d\n", bytes_sent);
     return 0;
 }
 
@@ -605,6 +620,7 @@ int receiveFileAsynchronously(int connectionId, struct packet *recvPacket)
         FILE *fp = fopen(tempfilename, "wb"); //for testing it should be filename
         if (fp == NULL) {
             printf("Error opening file.\n");
+            deletePacketAndMessage(recvPacket);
             return -1;
         }
 
@@ -612,12 +628,14 @@ int receiveFileAsynchronously(int connectionId, struct packet *recvPacket)
         connection->filePointer = fp;
 
         //write the packet received
-        int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), connection->filePointer);
+        int written_bytes = fwrite(recvPacket->message, 1, recvPacket->header->length, connection->filePointer);
+        deletePacketAndMessage(recvPacket);
 
     }
     else {
         //write the packet received
-        int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), connection->filePointer);
+        int written_bytes = fwrite(recvPacket->message, 1, recvPacket->header->length, connection->filePointer);
+        deletePacketAndMessage(recvPacket);
     }
     return 0;
 }

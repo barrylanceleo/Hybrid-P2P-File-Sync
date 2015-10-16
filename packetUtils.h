@@ -39,4 +39,6 @@ struct packet *packetEncoder(char *packetString);
 
 int printPacket(struct packet *packet);
 
+int deletePacketAndMessage(struct packet *pckt);
+
 #endif //PEER_SYNC_PACKETUTILS_H

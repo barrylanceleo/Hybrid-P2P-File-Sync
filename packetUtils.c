@@ -73,3 +73,21 @@ int printPacket(struct packet *packet) {
     printf("Message Type: %d\nFile Name: %s\nMessage Length: %d\nMessage: %s\n", packet->header->messageType,
            packet->header->fileName, packet->header->length, packet->message);
 }
+
+int deletePacketAndMessage(struct packet *pckt)
+{
+    free(pckt->message);
+    pckt->message = NULL;
+    free(pckt->header);
+    pckt->header = NULL;
+    free(pckt);
+    pckt = NULL;
+
+    return 1;
+}
+
+int deletePacket(struct packet *pckt)
+{
+    free(pckt->header);
+    free(pckt);
+}
