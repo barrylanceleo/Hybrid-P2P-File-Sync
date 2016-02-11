@@ -5,7 +5,7 @@
 #ifndef PEER_SYNC_PACKETUTILS_H
 #define PEER_SYNC_PACKETUTILS_H
 
-#define PACKET_SIZE 5000
+#define PACKET_SIZE 10000
 enum messageTypes {
     ok,
     error,

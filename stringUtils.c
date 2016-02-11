@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <sys/time.h>
 #include "stringUtils.h"
 
 char *stringConcat(char *string1, char *string2) {
@@ -96,7 +97,15 @@ char **splitString(char *input, char delimiter, int *outputSize) {
 char *printCurrentTime()
 {
     char time_string[100];
-    time_t current_time = time(0);
-    strftime(time_string, 100, "%H:%M:%S", localtime(&current_time));
-    return strdup(time_string);
+    char *output;
+//    time_t current_time = time(0);
+//    strftime(time_string, 100, "%H:%M:%S", localtime(&current_time));
+//    printf("%s\n", time_string);
+    //to get the milli seconds
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    strftime(time_string, 15, "%H:%M:%S", localtime(&now.tv_sec));
+    asprintf(&output, "%s:%03d", time_string, now.tv_usec/1000);
+
+    return output;
 }

@@ -158,8 +158,8 @@ struct connectionInfo *startServer(char *port, char *hostType) {
 
     //updating global variable name and myIpAddress
     // getIPAddress(&listenerAddress) returns 0.0.0.0 hence getting ip using the hostname
-    myHostName = (char *) malloc(sizeof(char) * 128);
-    gethostname(myHostName, 128);
+    myHostName = (char *) malloc(sizeof(char) * 25);
+    gethostname(myHostName, 254);
     myIpAddress = getIpfromHost(myHostName);
 
     //build the serverInfo structure to be retunrned
@@ -182,7 +182,10 @@ struct packet *readPacket(int sockfd) {
 
     //receive 2 bytes for message type
     int bytes_received = recv(sockfd, buffer, 2, 0);
-    //printf("Bytes of message Type received: %d", bytes_received);
+    if (bytes_received == 0) {
+        //printf("Recevied zero bytes. Probably because someone terminated.\n");
+        return NULL;
+    }
     if (bytes_received != 2) {
         char buffer2[2];
         bytes_received += recv(sockfd, buffer2, 1, 0);

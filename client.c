@@ -131,8 +131,8 @@ int runClient(char *port) {
                     //received terminate from server
                     if (recvPacket->header->messageType == terminate) {
                         printf("Received TERMINATE command from server.\n");
-                        int id = getIDForFD(connectionList, fd);
-                        terminateClient(id);
+                        int connectionId = getIDForFD(connectionList, fd);
+                        terminateConnection(connectionId);
                         peerList = NULL;
                         masterServer = NULL;
                         continue;
@@ -181,7 +181,7 @@ int runClient(char *port) {
                         //one of the clients terminated unexpectedly
                         int id = getIDForFD(connectionList, fd);
                         struct host *host = getHostByID(connectionList, id);
-                        printf("Peer: %s/%s terminated unexpectedly. Removing it from the list.\n",
+                        printf("%s/%s terminated unexpectedly. Removing it from the list.\n",
                                host->hostName, host->port, host->sockfd);
                         terminateConnection(id);
                         continue;
@@ -594,37 +594,6 @@ int sendFile(int connectionId, char *filename) // this is include the error mess
         int bytes_sent = send(destination->sockfd, packetString, strlen(packetString), 0);
         return -3;
     }
-    return 0;
-}
-
-int receiveFileASynchronously(int connectionId, struct packet *recvPacket)
-{
-    struct host *source = getHostByID(connectionList, connectionId);
-    printf("Receiving file: %s from %s/%s.\n",
-           recvPacket->header->fileName, source->hostName, source->port);
-
-    // Create file where data will be stored
-    char *filename = recvPacket->header->fileName;
-    char *tempfilename = stringConcat("./", filename);
-    FILE *fp = fopen(tempfilename, "wb"); //for testing it should be filename
-    if (fp == NULL) {
-        printf("Error opening file.\n");
-        return -1;
-    }
-
-    //write the first packet received
-    int written_bytes = fwrite(recvPacket->message, 1, strlen(recvPacket->message), fp);
-
-    //keep receiving packets till you get a ok packet
-    recvPacket = readPacket(source->sockfd);
-    //printPacket(recvPacket);
-    while (recvPacket->header->messageType != ok) {
-        written_bytes += fwrite(recvPacket->message, 1, strlen(recvPacket->message), fp);
-        recvPacket = readPacket(source->sockfd);
-        //printPacket(recvPacket);
-    }
-    printf("File %s download complete. Size: %d bytes.\n", filename, written_bytes);
-    fclose(fp);
     return 0;
 }
 
